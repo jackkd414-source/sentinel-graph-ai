@@ -1,0 +1,14 @@
+# /api/graph  —  setiap relasi membawa buktinya
+
+observed  ran            evidence_event_ids=[200]
+observed  authenticated  evidence_event_ids=[202]
+observed  authenticated  evidence_event_ids=[201]
+observed  resolved       evidence_event_ids=[175]
+observed  connected_to   evidence_event_ids=[176, 177]
+observed  resolved       evidence_event_ids=[176, 177]
+
+inferred  active_on      method=same account string appears in non-logon event on that host; n
+inferred  active_on      method=same account string appears in non-logon event on that host; n
+inferred  active_on      method=same account string appears in non-logon event on that host; n
+
+TOTAL: 52 edges, 52 dengan evidence

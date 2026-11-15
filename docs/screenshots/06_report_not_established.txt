@@ -1,9 +1,0 @@
-- **Confirmed compromise:** NOT established by this evidence set. The rule engine shows correlated suspicious behaviour, which requires analyst validation.
-- **Confirmed data exfiltration:** NOT established. Outbound transfer volume is observed; whether sensitive data left is unknown unless DLP or payload evidence exists.
-
-## 8. Recommendations
-
-Advisory only. SentinelGraph does not execute response actions.
-
-- Isolate the affected host pending forensic imaging, if the alert set is confirmed.
-- Rotate credentials for every account that appears in an authentication anomaly.

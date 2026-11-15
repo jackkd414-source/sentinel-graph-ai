@@ -1,6 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type Alert, type Health, type IncidentSummary } from "../api";
-import { Empty, ErrorBanner, Loading, SeverityChip, fmtTime } from "../components/ui";
+import { PageHeader } from "../components/layout";
+import {
+  DataTable, MetricItem, MetricStrip, PanelHeader, type Column,
+} from "../components/data";
+import {
+  EmptyState, ErrorState, LoadingState, SeverityIndicator, StatusIndicator, fmtTime, SEVERITIES,
+} from "../components/ui";
+import { Icons } from "../components/icons";
+import { Donut } from "../components/widgets";
 
 interface Props {
   onOpenIncident: (id: number) => void;
@@ -16,216 +24,186 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey }: P
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [h, inc, al] = await Promise.all([
-        api.health(), api.incidents(), api.alerts(),
-      ]);
+      const [h, inc, al] = await Promise.all([api.health(), api.incidents(), api.alerts()]);
       setHealth(h);
       setIncidents(inc.incidents);
       setAlerts(al.alerts);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load dashboard");
+      setError(e instanceof Error ? e.message : "Failed to load the dashboard");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { void load(); }, [reloadKey]);
+  useEffect(() => { void load(); }, [load, reloadKey]);
 
-  if (loading && !health) return <Loading label="Loading workspace…" />;
-  if (error && !health) return <ErrorBanner message={error} onRetry={load} />;
+  if (loading && !health) return <LoadingState label="Loading workspace…" />;
+  if (error && !health) return <ErrorState message={error} onRetry={load} />;
   if (!health) return null;
 
   const c = health.counts;
   const isEmpty = c.events === 0;
-  const severityCounts = alerts.reduce<Record<string, number>>((acc, a) => {
+  const sevCounts = alerts.reduce<Record<string, number>>((acc, a) => {
     acc[a.severity] = (acc[a.severity] || 0) + 1;
     return acc;
   }, {});
-  const order = ["critical", "high", "medium", "low", "info"];
-  const maxSev = Math.max(1, ...order.map((s) => severityCounts[s] || 0));
+  const openIncidents = incidents.filter((i) => i.status === "open").length;
+  const affected = new Set(alerts.flatMap((a) => (a.host ? [a.host] : []))).size;
 
-  const aiDot = health.ai.mode === "ai_enabled" ? "dot-ok"
-    : health.ai.mode === "missing_credential" ? "dot-warn" : "dot-idle";
+  const incidentCols: Column<IncidentSummary>[] = [
+    { key: "sev", header: "Severity", width: 96, render: (i) => <SeverityIndicator severity={i.severity} /> },
+    { key: "ref", header: "Incident", width: 92, render: (i) => <span className="mono" style={{ color: "var(--tw-primary)" }}>{i.ref}</span> },
+    { key: "title", header: "Title", className: "primary", render: (i) => (
+      <span className="truncate" style={{ display: "block", maxWidth: 320 }} title={i.title}>{i.title}</span>
+    ) },
+    { key: "asset", header: "Affected asset", width: 150, render: (i) => (
+      <span className="mono truncate" style={{ display: "block", maxWidth: 150 }}
+            title={i.hosts.join(", ")}>{i.hosts[0] || "—"}</span>
+    ) },
+    { key: "last", header: "Last activity", width: 158, render: (i) => <span className="mono num">{fmtTime(i.last_ts)}</span> },
+    { key: "status", header: "Status", width: 118, render: (i) => <StatusIndicator status={i.status} /> },
+  ];
+
+  const alertCols: Column<Alert>[] = [
+    { key: "rule", header: "Rule", width: 64, render: (a) => <span className="mono" style={{ color: "var(--tw-primary)" }}>{a.rule_id}</span> },
+    { key: "finding", header: "Finding", className: "primary", render: (a) => (
+      <span className="truncate" style={{ display: "block", maxWidth: 420 }} title={a.title}>{a.title}</span>
+    ) },
+    { key: "sev", header: "Severity", width: 96, render: (a) => <SeverityIndicator severity={a.severity} /> },
+    { key: "host", header: "Host", width: 140, render: (a) => <span className="mono">{a.host || "—"}</span> },
+    { key: "first", header: "First seen", width: 158, render: (a) => <span className="mono num">{fmtTime(a.first_ts)}</span> },
+    { key: "ev", header: "Evidence", width: 84, align: "right", render: (a) => (
+      <span className="mono num" style={{ color: "var(--tw-primary)" }}>{a.evidence.length}</span>
+    ) },
+  ];
 
   return (
-    <div className="col" style={{ gap: 16 }}>
+    <>
+      <PageHeader
+        title="Security overview"
+        subtitle="A clear view of events, investigations, and detection activity."
+        meta={<>Last updated <span className="mono">{fmtTime(health.time)}</span> UTC</>}
+        actions={
+          <>
+            <button className="tw-btn tw-btn-sm" onClick={() => void load()} disabled={loading}>
+              {Icons.refresh({ style: { width: 14, height: 14 } })}
+              Refresh
+            </button>
+            <button className="tw-btn tw-btn-sm tw-btn-primary" onClick={() => void onLoadDemo()} disabled={demoBusy}>
+              {demoBusy ? "Loading…" : "Load demo dataset"}
+            </button>
+          </>
+        }
+      />
+
       {isEmpty ? (
-        <div className="banner banner-info">
-          <span>
-            <strong>Workspace is empty.</strong> Load the built-in synthetic dataset to
-            explore the full pipeline (import → detection → correlation → graph → report).
-            All data is clearly labelled as synthetic demo material.
+        <div className="tw-banner tw-banner-info" style={{ marginBottom: 20 }}>
+          <span style={{ flex: 1 }}>
+            <strong>Workspace is empty.</strong> Load the built-in synthetic dataset to explore the
+            full pipeline (import → detection → correlation → graph → report). All demo material is
+            clearly labelled as synthetic.
           </span>
-          <button className="btn btn-primary btn-sm" onClick={() => void onLoadDemo()}
-                  disabled={demoBusy}>
-            {demoBusy ? "Loading…" : "Load demo dataset"}
+          <button className="tw-btn tw-btn-sm tw-btn-primary" onClick={() => void onLoadDemo()} disabled={demoBusy}>
+            Load demo dataset
           </button>
         </div>
       ) : null}
 
-      {error ? <ErrorBanner message={error} onRetry={load} /> : null}
+      {error ? <div style={{ marginBottom: 20 }}><ErrorState message={error} onRetry={load} /></div> : null}
 
-      <div className="grid grid-4">
-        <Stat label="Events normalized" value={c.events} sub={`${c.artifacts} artifact(s)`} />
-        <Stat label="Active alerts" value={c.alerts}
-              sub={`${severityCounts.critical || 0} critical`}
-              accent={severityCounts.critical ? "var(--critical)" : undefined} />
-        <Stat label="Incidents" value={c.incidents}
-              sub={`${incidents.filter((i) => i.status === "open").length} open`} />
-        <Stat label="Affected assets" value={new Set(alerts.flatMap((a) => a.host ? [a.host] : [])).size}
-              sub={`${c.iocs} IOC(s) loaded`} />
-      </div>
+      <MetricStrip>
+        <MetricItem label="Events normalized" value={c.events} sub={`${c.artifacts} artifact(s)`} />
+        <MetricItem label="Active alerts" value={c.alerts}
+                    sub={`${sevCounts.critical || 0} critical`} critical={!!sevCounts.critical} />
+        <MetricItem label="Incidents" value={c.incidents} sub={`${openIncidents} open`} />
+        <MetricItem label="Affected assets" value={affected} sub={`${c.iocs} IOC(s) loaded`} />
+      </MetricStrip>
 
-      <div className="grid" style={{ gridTemplateColumns: "1.45fr 1fr" }}>
-        <div className="panel">
-          <div className="panel-head">
-            <span className="panel-title">Recent incidents</span>
-            <span className="spacer" />
-            <span className="mono faint" style={{ fontSize: 10.5 }}>
-              grouped by shared host / account
-            </span>
-          </div>
-          {incidents.length === 0 ? (
-            <Empty title="No incidents yet"
-                   detail="Import data or load the demo dataset, then run analysis." />
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: 74 }}>Ref</th>
-                  <th>Title</th>
-                  <th style={{ width: 92 }}>Severity</th>
-                  <th style={{ width: 96 }}>Status</th>
-                  <th style={{ width: 76 }}>Alerts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {incidents.slice(0, 8).map((i) => (
-                  <tr key={i.id} className="clickable" onClick={() => onOpenIncident(i.id)}>
-                    <td className="mono" style={{ color: "var(--cyan)" }}>{i.ref}</td>
-                    <td className="truncate" style={{ maxWidth: 340 }} title={i.title}>{i.title}</td>
-                    <td><SeverityChip severity={i.severity} /></td>
-                    <td><span className="mono faint" style={{ fontSize: 11 }}>{i.status}</span></td>
-                    <td className="mono dim">{i.alert_count}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      <div className="tw-dash-split" style={{ marginTop: 20 }}>
+        <div className="tw-panel">
+          <PanelHeader title="Recent incidents"
+                       sub={`${incidents.length} total · grouped by shared host / account`} />
+          <DataTable
+            columns={incidentCols}
+            rows={incidents.slice(0, 8)}
+            rowKey={(i) => i.id}
+            onRowClick={(i) => onOpenIncident(i.id)}
+            empty={<EmptyState title="No incidents yet"
+                               detail="Import data or load the demo dataset, then run analysis." />}
+          />
         </div>
 
-        <div className="col" style={{ gap: 14 }}>
-          <div className="panel">
-            <div className="panel-head"><span className="panel-title">Severity distribution</span></div>
-            <div className="panel-body" style={{ paddingTop: 12 }}>
+        <div className="tw-dash-aside">
+          <div className="tw-panel">
+            <PanelHeader title="Detection posture" sub="by alert severity" />
+            <div className="tw-panel-body">
               {alerts.length === 0 ? (
-                <div className="dim" style={{ fontSize: 12.5 }}>No alerts.</div>
+                <div className="faint">No alerts on the current dataset.</div>
               ) : (
-                order.filter((s) => severityCounts[s]).map((s) => (
-                  <div key={s} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 7 }}>
-                    <span style={{ width: 62 }}><SeverityChip severity={s as Alert["severity"]} /></span>
-                    <div style={{ flex: 1, height: 7, background: "var(--bg)", borderRadius: 4, overflow: "hidden" }}>
-                      <div style={{
-                        width: `${((severityCounts[s] || 0) / maxSev) * 100}%`,
-                        height: "100%",
-                        background: `var(--${s === "info" ? "info" : s})`,
-                        borderRadius: 4,
-                      }} />
-                    </div>
-                    <span className="mono dim" style={{ width: 22, textAlign: "right" }}>
-                      {severityCounts[s]}
-                    </span>
-                  </div>
-                ))
+                <Donut
+                  caption="Total alerts"
+                  slices={SEVERITIES.filter((s) => sevCounts[s]).map((s) => ({
+                    label: s[0]!.toUpperCase() + s.slice(1),
+                    value: sevCounts[s] || 0,
+                    color: `var(--tw-${s})`,
+                  }))}
+                />
               )}
             </div>
           </div>
 
-          <div className="panel">
-            <div className="panel-head"><span className="panel-title">Analysis engine</span></div>
-            <div className="panel-body" style={{ fontSize: 12.5, lineHeight: 1.7 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span className={`status-dot ${aiDot}`} />
-                <strong style={{ fontSize: 12.5 }}>{health.ai.label}</strong>
+          <div className="tw-panel">
+            <PanelHeader title="System status" />
+            <div className="tw-panel-body">
+              <div className="tw-syslist">
+                <SysRow label="Detection engine" value="rule engine (deterministic)" ok />
+                <SysRow label="Database" value={health.db} ok />
+                <SysRow label="Correlation engine" value={`${c.graph_nodes} nodes / ${c.graph_edges} edges`} ok />
+                <SysRow label="Reports stored" value={String(c.reports)} ok />
               </div>
-              <div className="dim" style={{ fontSize: 12 }}>{health.ai.detail}</div>
-              <div style={{
-                marginTop: 10, paddingTop: 9, borderTop: "1px solid var(--line-soft)",
-                fontFamily: "var(--mono)", fontSize: 11, color: "var(--fg-faint)",
-              }}>
-                detection: rule engine (deterministic)<br />
-                graph: {c.graph_nodes} nodes / {c.graph_edges} edges<br />
-                db: {health.db}
+              <div style={{ marginTop: 14, paddingTop: 13, borderTop: "1px solid var(--tw-border)" }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <span className={`tw-dot ${health.ai.mode === "ai_enabled" ? "tw-dot-ok"
+                    : health.ai.mode === "missing_credential" ? "tw-dot-warn" : "tw-dot-idle"}`} />
+                  <strong style={{ fontSize: "var(--tw-fs-secondary)" }}>
+                    {health.ai.mode === "ai_enabled" ? health.ai.label : "AI provider not configured"}
+                  </strong>
+                </div>
+                <div className="faint" style={{ fontSize: "var(--tw-fs-secondary)", marginTop: 4, lineHeight: 1.6 }}>
+                  {health.ai.mode === "ai_enabled"
+                    ? health.ai.detail
+                    : "Core detection and investigation remain available without AI."}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="panel">
-        <div className="panel-head">
-          <span className="panel-title">Latest alerts</span>
-          <span className="spacer" />
-          <span className="mono faint" style={{ fontSize: 10.5 }}>every alert links to event IDs</span>
-        </div>
-        {alerts.length === 0 ? (
-          <Empty title="No alerts" detail="Nothing fired on the current dataset." />
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 60 }}>Rule</th>
-                <th>Alert</th>
-                <th style={{ width: 92 }}>Severity</th>
-                <th style={{ width: 130 }}>Host</th>
-                <th style={{ width: 150 }}>First seen (UTC)</th>
-                <th style={{ width: 70 }}>Evidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.slice(0, 10).map((a) => (
-                <tr key={a.id} className={a.incident_id ? "clickable" : ""}
-                    onClick={() => a.incident_id && onOpenIncident(a.incident_id)}>
-                  <td className="mono" style={{ color: "var(--cyan-dim)" }}>{a.rule_id}</td>
-                  <td className="truncate" style={{ maxWidth: 380 }} title={a.title}>{a.title}</td>
-                  <td><SeverityChip severity={a.severity} /></td>
-                  <td className="mono dim">{a.host || "—"}</td>
-                  <td className="mono dim">{fmtTime(a.first_ts)}</td>
-                  <td className="mono" style={{ color: "var(--cyan-dim)" }}>
-                    {a.evidence.length}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      <div className="tw-panel" style={{ marginTop: 20 }}>
+        <PanelHeader title="Recent detections" sub="every detection links to stored event IDs" />
+        <DataTable
+          columns={alertCols}
+          rows={alerts.slice(0, 10)}
+          rowKey={(a) => a.id}
+          onRowClick={(a) => a.incident_id && onOpenIncident(a.incident_id)}
+          empty={<EmptyState title="No detections" detail="Nothing fired on the current dataset." />}
+        />
       </div>
-    </div>
+    </>
   );
 }
 
-function Stat({ label, value, sub, accent }: {
-  label: string; value: number; sub?: string; accent?: string;
-}) {
+function SysRow({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
   return (
-    <div className="panel" style={{ padding: "13px 15px" }}>
-      <div style={{
-        fontSize: 10, letterSpacing: 1, textTransform: "uppercase",
-        color: "var(--fg-muted)", fontWeight: 650, marginBottom: 6,
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontSize: 25, fontWeight: 600, lineHeight: 1.1, color: accent || "var(--fg)",
-        fontFamily: "var(--mono)",
-      }}>
-        {value}
-      </div>
-      {sub ? <div className="faint" style={{ fontSize: 11, marginTop: 3 }}>{sub}</div> : null}
+    <div className="tw-sysrow">
+      <span className={`tw-dot ${ok ? "tw-dot-ok" : "tw-dot-idle"}`} />
+      <span className="tw-syslabel">{label}</span>
+      <span className="tw-sysval">{value}</span>
     </div>
   );
 }

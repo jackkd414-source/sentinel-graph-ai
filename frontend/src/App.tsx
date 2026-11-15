@@ -1,296 +1,250 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type Health } from "./api";
-import { Icon } from "./components/ui";
-import { AttackGraph } from "./components/AttackGraph";
+import { api, type Health, type Project } from "./api";
+import { AppShell, GlobalSearch, Sidebar, Topbar, type NavGroup } from "./components/layout";
+import { Icons } from "./components/icons";
+import { ErrorState, Notification } from "./components/ui";
 import { Dashboard } from "./pages/Dashboard";
 import { IncidentsList } from "./pages/IncidentsList";
 import { IncidentView } from "./pages/IncidentView";
+import { GraphPage } from "./pages/GraphPage";
 import { EventsExplorer } from "./pages/EventsExplorer";
-import { ArtifactsPage, RulesPage } from "./pages/ArtifactsRules";
-import { ProvidersPage } from "./pages/ProvidersPage";
 import { ImportPage } from "./pages/ImportPage";
-import "./styles.css";
+import { EvidenceRepository, DetectionRules } from "./pages/ArtifactsRules";
+import { ProvidersPage } from "./pages/ProvidersPage";
+import { ReportsPage } from "./pages/ReportsPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { clearToken, getToken, hasToken, setToken } from "./auth";
 
-type Page =
-  | { kind: "dashboard" }
-  | { kind: "incidents" }
-  | { kind: "incident"; id: number }
-  | { kind: "graph" }
-  | { kind: "events" }
-  | { kind: "evidence" }
-  | { kind: "rules" }
-  | { kind: "providers" }
-  | { kind: "import" };
+type RouteKey =
+  | "dashboard" | "incidents" | "incident" | "graph" | "events"
+  | "import" | "evidence" | "rules" | "providers" | "reports" | "settings";
 
-const TITLES: Record<Page["kind"], { title: string; sub: string }> = {
-  dashboard: { title: "Dashboard", sub: "workspace overview" },
-  incidents: { title: "Incidents", sub: "correlated alert groups" },
-  incident: { title: "Investigation", sub: "evidence · graph · timeline" },
-  graph: { title: "Attack Graph", sub: "entities and relationships" },
-  events: { title: "Events", sub: "normalized event store" },
-  evidence: { title: "Evidence", sub: "imported artifacts" },
-  rules: { title: "Detection Rules", sub: "deterministic engine" },
-  providers: { title: "AI Providers", sub: "model configuration" },
-  import: { title: "Import", sub: "ingest security data" },
-};
+const initials = (name?: string) =>
+  (name || "SentinelGraph AI")
+    .split(/\s+/).filter(Boolean).slice(0, 2)
+    .map((w) => w[0]!.toUpperCase()).join("") || "SG";
 
 export function App() {
-  const [page, setPage] = useState<Page>({ kind: "dashboard" });
-  const [health, setHealth] = useState<Health | null>(null);
-  const [demoBusy, setDemoBusy] = useState(false);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [toast, setToast] = useState<string | null>(null);
-  const [bootError, setBootError] = useState<string | null>(null);
+  const [route, setRoute] = useState<RouteKey>("dashboard");
+  const [incidentId, setIncidentId] = useState<number | null>(null);
+  const [eventsQuery, setEventsQuery] = useState("");
+  const [graphFocusEvent, setGraphFocusEvent] = useState<number | null>(null);
+  const [search, setSearch] = useState("");
 
-  const refreshHealth = useCallback(async () => {
+  const [health, setHealth] = useState<Health | null>(null);
+  const [project, setProject] = useState<Project | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [demoBusy, setDemoBusy] = useState(false);
+  const [toast, setToast] = useState<{ kind: "ok" | "err" | "info"; message: string } | null>(null);
+  const [tokenOpen, setTokenOpen] = useState(false);
+
+  const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  const loadShell = useCallback(async () => {
     try {
       const h = await api.health();
       setHealth(h);
       setBootError(null);
     } catch (e) {
-      setBootError(e instanceof Error
-        ? `Cannot reach the API: ${e.message}`
-        : "Cannot reach the API");
+      setBootError(e instanceof Error ? e.message : "Cannot reach the backend");
     }
+    try {
+      const p = await api.projects();
+      setProject(p.projects[0] ?? null);
+    } catch { /* workspace indicator is non-critical */ }
   }, []);
 
-  useEffect(() => { void refreshHealth(); }, [refreshHealth]);
+  useEffect(() => { void loadShell(); }, [loadShell, reloadKey]);
 
-  const triggerReload = () => {
-    setReloadKey((k) => k + 1);
-    void refreshHealth();
-  };
+  useEffect(() => {
+    const onUnauth = () => setTokenOpen(true);
+    const onAuth = () => void loadShell();
+    window.addEventListener("sg:unauthorized", onUnauth);
+    window.addEventListener("sg:auth-change", onAuth);
+    return () => {
+      window.removeEventListener("sg:unauthorized", onUnauth);
+      window.removeEventListener("sg:auth-change", onAuth);
+    };
+  }, [loadShell]);
 
-  const loadDemo = async () => {
+  const openIncident = useCallback((id: number, _ref?: string) => {
+    setIncidentId(id);
+    setRoute("incident");
+  }, []);
+
+  const loadDemo = useCallback(async () => {
     setDemoBusy(true);
     try {
-      const r = await api.demoLoad(undefined, true);
-      setToast(
-        `Demo loaded: ${r.analysis.events_analyzed} events → ` +
-        `${r.analysis.alerts_created} alerts → ${r.analysis.incidents_created} incidents. ` +
-        `${r.edge_case_import.records_failed} malformed record(s) rejected as designed.`,
-      );
-      triggerReload();
-      setPage({ kind: "dashboard" });
-      window.setTimeout(() => setToast(null), 9000);
+      const r = await api.demoLoad();
+      setToast({ kind: "ok", message: `Demo dataset loaded: ${r.analysis.events_analyzed} events, ${r.analysis.alerts_created} alerts, ${r.analysis.incidents_created} incidents.` });
+      refresh();
     } catch (e) {
-      setToast(e instanceof Error ? `Demo load failed: ${e.message}` : "Demo load failed");
-    } finally {
-      setDemoBusy(false);
-    }
+      setToast({ kind: "err", message: e instanceof Error ? e.message : "Failed to load the demo dataset" });
+    } finally { setDemoBusy(false); }
+  }, [refresh]);
+
+  const submitSearch = () => {
+    setEventsQuery(search);
+    setRoute("events");
   };
 
-  const nav = (next: Page) => setPage(next);
-  const isActive = (kinds: Page["kind"][]) => kinds.includes(page.kind);
-
   const c = health?.counts;
+  const navGroups: NavGroup[] = [
+    { label: "Workspace", items: [
+      { key: "dashboard", label: "Dashboard", icon: Icons.dashboard({}) },
+    ] },
+    { label: "Investigate", items: [
+      { key: "incidents", label: "Incidents", icon: Icons.incidents({}),
+        badge: c ? <span className="tw-nav-badge">{c.incidents}</span> : undefined },
+      { key: "graph", label: "Attack Graph", icon: Icons.graph({}) },
+      { key: "events", label: "Events", icon: Icons.events({}),
+        badge: c ? <span className="tw-nav-badge">{c.events}</span> : undefined },
+    ] },
+    { label: "Evidence", items: [
+      { key: "import", label: "Imports", icon: Icons.imports({}) },
+      { key: "evidence", label: "Evidence Repository", icon: Icons.evidence({}),
+        badge: c ? <span className="tw-nav-badge">{c.artifacts}</span> : undefined },
+    ] },
+    { label: "Engine", items: [
+      { key: "rules", label: "Detection Rules", icon: Icons.rules({}) },
+      { key: "providers", label: "AI Providers", icon: Icons.providers({}),
+        badge: health ? (
+          <span className={`tw-nav-badge ${health.ai.mode === "ai_enabled" ? "on"
+            : health.ai.mode === "missing_credential" ? "warn" : ""}`}>
+            {health.ai.mode === "ai_enabled" ? "on" : health.ai.mode === "missing_credential" ? "!" : "off"}
+          </span>) : undefined },
+    ] },
+    { label: "System", items: [
+      { key: "reports", label: "Reports", icon: Icons.reports({}) },
+      { key: "settings", label: "Settings", icon: Icons.settings({}) },
+    ] },
+  ];
+
+  const sidebar = (
+    <Sidebar
+      groups={navGroups}
+      active={route}
+      onNavigate={(k) => setRoute(k as RouteKey)}
+      footer={
+        <>
+          <span className="row" style={{ gap: 6 }}>
+            <span className={`tw-dot ${health?.status === "ok" ? "tw-dot-ok" : "tw-dot-err"}`} />
+            {health?.status === "ok" ? "System Healthy" : "Backend unreachable"}
+          </span>
+          <span className="mono">v{health?.version || "—"}</span>
+        </>
+      }
+    />
+  );
+
+  const topbar = (
+    <Topbar
+      search={<GlobalSearch value={search} onChange={setSearch} onSubmit={submitSearch} />}
+      right={
+        <>
+          <button className="tw-ws" onClick={() => setRoute("settings")} title="Workspace">
+            {Icons.building({ style: { width: 15, height: 15 } })}
+            <b>{project?.name || "Default Workspace"}</b>
+            {Icons.chevronDown({ style: { width: 13, height: 13 } })}
+          </button>
+          <span className="tw-conn">
+            <span className={`tw-dot ${health?.status === "ok" ? "tw-dot-ok" : "tw-dot-err"}`} />
+            {health?.status === "ok" ? "Connected" : "Offline"}
+          </span>
+          <button className="tw-icon-btn" title="Alerts" aria-label="Alerts" onClick={() => setRoute("events")}>
+            {Icons.bell({ style: { width: 17, height: 17 } })}
+          </button>
+          <button className="tw-avatar" title={hasToken() ? "Session token set" : "Sign in"}
+                  aria-label="Session" onClick={() => setTokenOpen(true)}>
+            {initials(project?.name)}
+          </button>
+        </>
+      }
+    />
+  );
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark"><Icon.shield /></span>
-          <div className="brand-text">
-            <span className="brand-name">SentinelGraph AI</span>
-            <span className="brand-tag">From Signals to Story</span>
-          </div>
+    <AppShell sidebar={sidebar} topbar={topbar}>
+      {toast ? (
+        <div className="tw-toast-wrap">
+          <Notification kind={toast.kind} message={toast.message} onClose={() => setToast(null)} />
         </div>
+      ) : null}
 
-        <nav className="nav">
-          <div className="nav-section">Investigate</div>
-          <NavItem active={isActive(["dashboard"])} onClick={() => nav({ kind: "dashboard" })}
-                   icon={<Icon.dashboard />} label="Dashboard" />
-          <NavItem active={isActive(["incidents", "incident"])}
-                   onClick={() => nav({ kind: "incidents" })}
-                   icon={<Icon.incident />} label="Incidents"
-                   badge={c ? String(c.incidents) : undefined} />
-          <NavItem active={isActive(["graph"])} onClick={() => nav({ kind: "graph" })}
-                   icon={<Icon.graph />} label="Attack Graph" />
-          <NavItem active={isActive(["events"])} onClick={() => nav({ kind: "events" })}
-                   icon={<Icon.timeline />} label="Events"
-                   badge={c ? String(c.events) : undefined} />
-
-          <div className="nav-section">Data</div>
-          <NavItem active={isActive(["import"])} onClick={() => nav({ kind: "import" })}
-                   icon={<Icon.upload />} label="Import" />
-          <NavItem active={isActive(["evidence"])} onClick={() => nav({ kind: "evidence" })}
-                   icon={<Icon.evidence />} label="Evidence"
-                   badge={c ? String(c.artifacts) : undefined} />
-
-          <div className="nav-section">Engine</div>
-          <NavItem active={isActive(["rules"])} onClick={() => nav({ kind: "rules" })}
-                   icon={<Icon.rules />} label="Detection Rules" />
-          <NavItem active={isActive(["providers"])} onClick={() => nav({ kind: "providers" })}
-                   icon={<Icon.settings />} label="AI Providers"
-                   badge={health ? (health.ai.mode === "ai_enabled" ? "on" : "off") : undefined}
-                   hot={health?.ai.mode === "missing_credential"} />
-        </nav>
-
-        <div className="sidebar-foot">
-          {health ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                <span className={`status-dot ${
-                  health.ai.mode === "ai_enabled" ? "dot-ok"
-                  : health.ai.mode === "missing_credential" ? "dot-warn" : "dot-idle"}`} />
-                <span>{health.ai.mode === "ai_enabled" ? "AI enabled" : "core mode"}</span>
-              </div>
-              <div style={{ fontSize: 10 }}>v{health.version} · {health.db}</div>
-            </>
-          ) : <span>connecting…</span>}
+      {bootError ? (
+        <div className="tw-content">
+          <ErrorState message={bootError} onRetry={() => void loadShell()} />
         </div>
-      </aside>
+      ) : route === "dashboard" ? (
+        <div className="tw-content">
+          <Dashboard onOpenIncident={openIncident} onLoadDemo={loadDemo} demoBusy={demoBusy} reloadKey={reloadKey} />
+        </div>
+      ) : route === "incidents" ? (
+        <div className="tw-content"><IncidentsList onOpen={openIncident} /></div>
+      ) : route === "incident" ? (
+        <IncidentView incidentId={incidentId} />
+      ) : route === "graph" ? (
+        <GraphPage focusEventId={graphFocusEvent} onFocusConsumed={() => setGraphFocusEvent(null)}
+                   onSearchEvents={(q) => { setEventsQuery(q); setRoute("events"); }} />
+      ) : route === "events" ? (
+        <div className="tw-content">
+          <EventsExplorer initialQuery={eventsQuery}
+                          onOpenGraphForEvent={(id) => { setGraphFocusEvent(id); setRoute("graph"); }} />
+        </div>
+      ) : route === "import" ? (
+        <div className="tw-content"><ImportPage onImported={refresh} /></div>
+      ) : route === "evidence" ? (
+        <div className="tw-content">
+          <EvidenceRepository onImport={() => setRoute("import")} reloadKey={reloadKey} />
+        </div>
+      ) : route === "rules" ? (
+        <div className="tw-content"><DetectionRules onReanalyzed={refresh} /></div>
+      ) : route === "providers" ? (
+        <div className="tw-content"><ProvidersPage /></div>
+      ) : route === "reports" ? (
+        <div className="tw-content"><ReportsPage onOpenIncident={openIncident} /></div>
+      ) : (
+        <div className="tw-content"><SettingsPage /></div>
+      )}
 
-      <main className="main">
-        <header className="topbar">
-          <div>
-            <h1>{TITLES[page.kind].title}</h1>
-          </div>
-          <span className="topbar-sub">{TITLES[page.kind].sub}</span>
-          <div className="topbar-right">
-            <button className="btn btn-sm" onClick={triggerReload} title="Refresh data">
-              <Icon.refresh /> Refresh
-            </button>
-            <button className="btn btn-sm btn-primary" onClick={() => void loadDemo()}
-                    disabled={demoBusy} title="Load the built-in synthetic dataset">
-              {demoBusy ? <span className="spinner" /> : <Icon.shield />}
-              {demoBusy ? "Loading…" : "Load demo"}
-            </button>
-          </div>
-        </header>
+      {tokenOpen ? (
+        <TokenDialog onClose={() => { setTokenOpen(false); void loadShell(); }} />
+      ) : null}
+    </AppShell>
+  );
+}
 
-        {bootError ? (
-          <div style={{ padding: 20 }}>
-            <div className="banner banner-err">
-              <span>
-                <strong>{bootError}</strong>
-                <br />
-                Make sure the backend is running:
-                <span className="mono"> ./.venv/Scripts/python.exe -m sentinelgraph serve</span>
+function TokenDialog({ onClose }: { onClose: () => void }) {
+  const [value, setValue] = useState("");
+  return (
+    <div className="tw-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="tw-dialog" role="dialog" aria-modal="true" aria-label="Session token">
+        <div className="tw-dialog-head">Session token</div>
+        <div className="tw-dialog-body">
+          <p className="faint" style={{ fontSize: "var(--tw-fs-secondary)", lineHeight: 1.6, marginBottom: 12 }}>
+            Required only when the server runs with <span className="mono">SG_AUTH_TOKEN</span>. It is kept in
+            session storage for this tab and never rendered back.
+          </p>
+          <input className="tw-input" type="password" placeholder="Bearer token" autoFocus
+                 value={value} onChange={(e) => setValue(e.target.value)}
+                 onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) { setToken(value); onClose(); } }} />
+          {getToken() ? (
+            <div className="row" style={{ marginTop: 10, gap: 8 }}>
+              <span className="tw-dot tw-dot-ok" />
+              <span className="faint" style={{ fontSize: "var(--tw-fs-meta)" }}>
+                A token is currently set ({getToken().length} chars, masked).
               </span>
             </div>
-          </div>
-        ) : null}
-
-        {toast ? (
-          <div style={{ padding: "12px 20px 0" }}>
-            <div className="banner banner-ok">
-              <span style={{ flex: 1 }}>{toast}</span>
-              <button className="btn btn-sm" onClick={() => setToast(null)}>Dismiss</button>
-            </div>
-          </div>
-        ) : null}
-
-        <div className={page.kind === "incident" || page.kind === "graph" ? "content flush" : "content"}>
-          {page.kind === "dashboard" && (
-            <Dashboard
-              reloadKey={reloadKey}
-              demoBusy={demoBusy}
-              onLoadDemo={loadDemo}
-              onOpenIncident={(id) => nav({ kind: "incident", id })}
-            />
-          )}
-          {page.kind === "incidents" && (
-            <IncidentsList onOpen={(id) => nav({ kind: "incident", id })} />
-          )}
-          {page.kind === "incident" && (
-            <IncidentView incidentId={page.id} />
-          )}
-          {page.kind === "graph" && <GlobalGraph />}
-          {page.kind === "events" && <EventsExplorer />}
-          {page.kind === "evidence" && (
-            <ArtifactsPage onImport={() => nav({ kind: "import" })} reloadKey={reloadKey} />
-          )}
-          {page.kind === "rules" && <RulesPage onReanalyzed={triggerReload} />}
-          {page.kind === "providers" && <ProvidersPage />}
-          {page.kind === "import" && <ImportPage onImported={triggerReload} />}
+          ) : null}
         </div>
-      </main>
-    </div>
-  );
-}
-
-function NavItem({ active, onClick, icon, label, badge, hot }: {
-  active: boolean; onClick: () => void; icon: React.ReactNode;
-  label: string; badge?: string; hot?: boolean;
-}) {
-  return (
-    <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}>
-      {icon}
-      <span>{label}</span>
-      {badge ? <span className={`nav-badge ${hot ? "hot" : ""}`}>{badge}</span> : null}
-    </button>
-  );
-}
-
-/* Global graph view: same renderer, full-workspace filters. */
-function GlobalGraph() {
-  const [data, setData] = useState<Awaited<ReturnType<typeof api.graph>> | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [showInferred, setShowInferred] = useState(true);
-  const [search, setSearch] = useState("");
-  const [types, setTypes] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<number | null>(null);
-  const [showEvents, setShowEvents] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      setError(null);
-      const g = await api.graph({
-        include_inferred: true,
-        search: search || undefined,
-      });
-      setData(g);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load graph");
-    }
-  }, [search]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{
-        display: "flex", gap: 10, padding: "10px 16px", borderBottom: "1px solid var(--line)",
-        background: "var(--bg-elevated)", alignItems: "center", flexWrap: "wrap",
-      }}>
-        <input className="input" style={{ width: 240 }} placeholder="Search entity…"
-               value={search}
-               onChange={(e) => setSearch(e.target.value)} />
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-          <input type="checkbox" checked={showInferred}
-                 onChange={(e) => setShowInferred(e.target.checked)} />
-          Show inferred
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
-          <input type="checkbox" checked={showEvents}
-                 onChange={(e) => setShowEvents(e.target.checked)} />
-          Show event nodes
-        </label>
-        <span style={{ width: 1, height: 15, background: "var(--line)" }} />
-        {data ? (
-          [...new Set(data.nodes.map((n) => n.node_type))].sort().map((t) => (
-            <button key={t} className={`chip ${types.has(t) ? "chip-observed" : "chip-info"}`}
-                    style={{ cursor: "pointer", border: "1px solid var(--line)" }}
-                    onClick={() => {
-                      const next = new Set(types);
-                      if (next.has(t)) next.delete(t); else next.add(t);
-                      setTypes(next);
-                    }}>
-              {t}
-            </button>
-          ))
-        ) : null}
-      </div>
-      {error ? <div style={{ padding: 16 }} className="banner banner-err">{error}</div> : null}
-      <div style={{ flex: 1, minHeight: 0, display: "grid",
-                    gridTemplateColumns: selected ? "1fr 380px" : "1fr" }}>
-        <div style={{ minWidth: 0 }}>
-          {data ? (
-            <AttackGraph data={data} selectedId={selected} onSelect={setSelected}
-                         showInferred={showInferred} highlightTypes={types}
-                         showEvents={showEvents} />
-          ) : <div className="loading-row"><span className="spinner" />Building graph…</div>}
+        <div className="tw-dialog-foot">
+          {getToken() ? (
+            <button className="tw-btn" onClick={() => { clearToken(); onClose(); }}>Clear token</button>
+          ) : null}
+          <button className="tw-btn" onClick={onClose}>Cancel</button>
+          <button className="tw-btn tw-btn-primary" disabled={!value.trim()}
+                  onClick={() => { setToken(value); onClose(); }}>Save</button>
         </div>
       </div>
     </div>

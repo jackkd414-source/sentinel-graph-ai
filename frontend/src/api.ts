@@ -1,6 +1,8 @@
 // Typed API surface. Mirrors the FastAPI routes exactly - if a field is not
 // returned by the backend, it is not declared here.
 
+import { notifyUnauthorized, withAuth } from "./auth";
+
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
 export type EdgeStatus = "observed" | "inferred";
 export type TsStatus = "ok" | "assumed" | "invalid" | "missing";
@@ -27,6 +29,13 @@ export interface AiStatus {
   last_test_status: string | null;
   last_test_at: string | null;
   encryption_available: boolean;
+}
+
+/** Where the at-rest credential key comes from. Never contains the key. */
+export interface CredentialStorage {
+  available: boolean;
+  source: "env" | "file" | "generated" | "invalid" | "none";
+  path: string | null;
 }
 
 export interface Health {
@@ -264,6 +273,8 @@ export interface Rule {
   severity: Severity;
   version: string;
   enabled: number;
+  attack?: { id: string; name: string; tactic: string }[];
+  attack_note?: string;
 }
 
 export interface ProviderConfig {
@@ -371,11 +382,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = withAuth({ "Content-Type": "application/json", ...(init?.headers || {}) });
   const res = await fetch(path, {
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
     ...init,
+    headers,
   });
   if (!res.ok) {
+    if (res.status === 401) notifyUnauthorized();
     let detail = `HTTP ${res.status}`;
     try {
       const body = await res.json();
@@ -388,6 +401,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/** Authenticated fetch for call sites that need the raw Response (uploads, blobs). */
+export async function authFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers = withAuth(init?.headers);
+  const res = await fetch(path, { ...init, headers });
+  if (res.status === 401) notifyUnauthorized();
+  return res;
+}
+
+/**
+ * Download a report through fetch so the Authorization header is sent.
+ * A plain <a href> cannot carry a bearer token when auth is enabled.
+ */
+export async function downloadReport(url: string, filename: string): Promise<void> {
+  const res = await authFetch(url);
+  if (!res.ok) throw new ApiError(res.status, `HTTP ${res.status}`);
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
 }
 
 const qs = (params: Record<string, string | number | boolean | undefined | null>) => {
@@ -463,6 +502,7 @@ export const api = {
     configs: ProviderConfig[];
     types: Record<string, ProviderTypeMeta>;
     encryption_available: boolean;
+    credential_storage?: CredentialStorage;
   }>("/api/ai/providers"),
   createProvider: (body: Record<string, unknown>) =>
     request<ProviderConfig>("/api/ai/providers",
@@ -496,11 +536,21 @@ export const api = {
       manifest?: Record<string, unknown>;
     }>(`/api/incidents/${id}/analyze${qs({ task })}`, { method: "POST" }),
 
-  report: (id: number, fmt: "md" | "json" | "html") =>
-    request<{ id: number | null; fmt: string; content: string; incident_ref: string }>(
-      `/api/incidents/${id}/report${qs({ fmt })}`, { method: "POST" }),
-  reportUrl: (id: number, fmt: "md" | "json" | "html") =>
-    `/api/incidents/${id}/report${qs({ fmt })}`,
+  report: (id: number, fmt: "md" | "json" | "html", useAi = false) =>
+    request<{
+      id: number | null; fmt: string; content: string; incident_ref: string;
+      ai: { status: string; provider?: string; model?: string;
+            error_message?: string; message?: string } | null;
+    }>(`/api/incidents/${id}/report${qs({ fmt, use_ai: useAi || undefined })}`,
+       { method: "POST" }),
+  reportUrl: (id: number, fmt: "md" | "json" | "html", useAi = false) =>
+    `/api/incidents/${id}/report${qs({ fmt, use_ai: useAi || undefined })}`,
+
+  reports: (projectId?: number) =>
+    request<{
+      reports: { id: number; incident_id: number; fmt: string;
+                 created_at: string; ref: string }[];
+    }>(`/api/reports${qs({ project_id: projectId })}`),
 
   audit: () => request<{
     entries: { id: number; action: string; target: string | null;

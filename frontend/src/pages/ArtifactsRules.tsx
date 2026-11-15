@@ -1,18 +1,25 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type Artifact, type Rule } from "../api";
-import { Empty, ErrorBanner, Loading, SeverityChip, fmtBytes, fmtTime } from "../components/ui";
+import { PageHeader } from "../components/layout";
+import { DataTable, InspectorPanel, PanelHeader, type Column } from "../components/data";
+import {
+  ConfirmDialog, EmptyState, ErrorState, LoadingState, SeverityIndicator, SourceLabel, StatusIndicator,
+  fmtBytes, fmtTime,
+} from "../components/ui";
+import { Icons } from "../components/icons";
 
-export function ArtifactsPage({ onImport, reloadKey }: {
-  onImport: () => void; reloadKey: number;
-}) {
+/* ---------------------------------------------- Evidence repository ----- */
+
+export function EvidenceRepository({ onImport, reloadKey }: { onImport: () => void; reloadKey: number }) {
   const [items, setItems] = useState<Artifact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<number | null>(null);
-  const [resetting, setResetting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Artifact | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState<null | { title: string; body: string; label: string; run: () => Promise<void> }>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const r = await api.artifacts();
@@ -20,175 +27,174 @@ export function ArtifactsPage({ onImport, reloadKey }: {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load artifacts");
     } finally { setLoading(false); }
-  };
+  }, []);
 
-  const removeArtifact = async (a: Artifact) => {
-    if (!window.confirm(
-      `Delete "${a.name}"?\n\nThis removes the imported file and every event it produced, ` +
-      `then rebuilds alerts, incidents and the attack graph from what is left. ` +
-      `This cannot be undone.`)) return;
-    setBusy(a.id); setError(null); setNotice(null);
-    try {
+  useEffect(() => { void load(); }, [load, reloadKey]);
+
+  const removeArtifact = (a: Artifact) => setConfirm({
+    title: `Delete “${a.name}”?`,
+    body: "This removes the imported file and every event it produced, then rebuilds alerts, "
+        + "incidents and the attack graph from what is left. This cannot be undone.",
+    label: "Delete artifact",
+    run: async () => {
+      setBusy(true); setNotice(null);
       const r = await api.deleteArtifact(a.id);
-      setNotice(`Deleted "${r.deleted_artifact}" — ${r.events_removed} event(s) removed, ` +
-        `derived data rebuilt.`);
+      setNotice(`Deleted “${r.deleted_artifact}” — ${r.events_removed} event(s) removed, derived data rebuilt.`);
+      setSelected(null);
       await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
-    } finally { setBusy(null); }
-  };
+      setBusy(false);
+    },
+  });
 
-  const clearAll = async (keepIocs: boolean) => {
-    if (!window.confirm(
-      keepIocs
-        ? "Clear ALL imported data (events, alerts, incidents, graph, artifacts)?\n\nThreat-intelligence indicators are kept."
-        : "Clear ALL imported data AND the threat-intelligence indicators?\n\nThe workspace will be empty.")) return;
-    setResetting(true); setError(null); setNotice(null);
-    try {
+  const clearAll = (keepIocs: boolean) => setConfirm({
+    title: keepIocs ? "Clear all imported data?" : "Clear all data AND threat indicators?",
+    body: keepIocs
+      ? "Removes every imported event, alert, incident, graph node and artifact. Threat-intelligence indicators are kept."
+      : "Removes every imported event, alert, incident, graph node, artifact AND the threat-intelligence indicators. The workspace becomes empty.",
+    label: "Clear data",
+    run: async () => {
+      setBusy(true); setNotice(null);
       const r = await api.resetData(keepIocs);
       const n = Object.values(r.cleared).reduce((s, v) => s + v, 0);
-      setNotice(`Cleared ${n} row(s). ` +
-        `Remaining: ${r.counts.events} events, ${r.counts.alerts} alerts, ${r.counts.incidents} incidents.`);
+      setNotice(`Cleared ${n} row(s). Remaining: ${r.counts.events} events, ${r.counts.alerts} alerts, ${r.counts.incidents} incidents.`);
       await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Reset failed");
-    } finally { setResetting(false); }
-  };
+      setBusy(false);
+    },
+  });
 
-  useEffect(() => { void load(); }, [reloadKey]);
-
-  if (loading) return <Loading />;
-  if (error) return <ErrorBanner message={error} onRetry={load} />;
+  const cols: Column<Artifact>[] = [
+    { key: "name", header: "Artifact", className: "primary", render: (a) => (
+      <span className="mono truncate" style={{ display: "block", maxWidth: 220 }} title={a.name}>{a.name}</span>) },
+    { key: "kind", header: "Type", width: 110, render: (a) => <span className="mono faint">{a.artifact_kind}</span> },
+    { key: "source", header: "Source", width: 130, render: (a) => <SourceLabel>{a.source_type}</SourceLabel> },
+    { key: "records", header: "Records", width: 104, render: (a) => (
+      <span className="mono num">{a.record_ok}/{a.record_total}
+        {a.record_failed > 0 ? <span style={{ color: "var(--tw-high)" }}> ({a.record_failed}✗)</span> : null}
+      </span>) },
+    { key: "parse", header: "Parse", width: 100, render: (a) => <StatusIndicator status={a.parse_status} /> },
+    { key: "size", header: "Size", width: 90, align: "right", render: (a) => <span className="mono num">{fmtBytes(a.size_bytes)}</span> },
+    { key: "imported", header: "Imported", width: 160, render: (a) => <span className="mono num">{fmtTime(a.imported_at)}</span> },
+    { key: "sha", header: "SHA-256", width: 120, render: (a) => (
+      <span className="mono faint" title={a.sha256 || ""}>{(a.sha256 || "—").slice(0, 14)}…</span>) },
+  ];
 
   return (
-    <div className="col" style={{ gap: 12 }}>
-      <div className="row">
-        <span className="dim" style={{ fontSize: 12.5, flex: 1 }}>
-          Every import is recorded with record counts, parse status, and a SHA-256 of the
-          exact bytes received.
-        </span>
-        <button className="btn btn-primary btn-sm" onClick={onImport}>Import data</button>
-      </div>
+    <>
+      <PageHeader
+        title="Evidence Repository"
+        subtitle="Every import, with record counts, parse status and the SHA-256 of the exact bytes received."
+        actions={
+          <>
+            <button className="tw-btn tw-btn-sm" onClick={() => void load()}>Refresh</button>
+            <button className="tw-btn tw-btn-sm tw-btn-primary" onClick={onImport}>Import data</button>
+          </>
+        }
+      />
 
-      {notice ? (
-        <div className="banner banner-info"><span>{notice}</span></div>
-      ) : null}
+      {notice ? <div className="tw-banner tw-banner-info" style={{ marginBottom: 16 }}><span>{notice}</span></div> : null}
 
-      <div className="banner banner-info">
+      <div className="tw-banner tw-banner-info" style={{ marginBottom: 16 }}>
         <span>
-          <strong>What the SHA-256 proves:</strong> it verifies that a stored copy is identical
-          to the bytes that were imported. It does <em>not</em> prove the original file was
-          unmodified before it reached this tool.
+          <strong>What the SHA-256 proves:</strong> it verifies that a stored copy is identical to the
+          bytes that were imported. It does <em>not</em> prove the original file was unmodified before
+          it reached this tool.
         </span>
       </div>
 
-      {items.length === 0 ? (
-        <div className="panel"><Empty title="No artifacts" detail="Import a file or load the demo dataset." /></div>
-      ) : (
-        <div className="panel">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th style={{ width: 130 }}>Type</th>
-                <th style={{ width: 100 }}>Records</th>
-                <th style={{ width: 96 }}>Parse</th>
-                <th style={{ width: 84 }}>Size</th>
-                <th style={{ width: 90 }}>Synthetic</th>
-                <th style={{ width: 170 }}>Imported (UTC)</th>
-                <th style={{ width: 190 }}>SHA-256</th>
-                <th style={{ width: 84 }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((a) => (
-                <tr key={a.id}>
-                  <td className="mono" style={{ fontSize: 11.5 }}>{a.name}</td>
-                  <td className="mono faint" style={{ fontSize: 10.5 }}>{a.source_type}</td>
-                  <td className="mono dim">
-                    {a.record_ok}/{a.record_total}
-                    {a.record_failed > 0 ? (
-                      <span style={{ color: "var(--high)" }}> ({a.record_failed} rejected)</span>
-                    ) : null}
-                  </td>
-                  <td>
-                    <span className={`chip ${a.parse_status === "ok" ? "chip-observed"
-                      : a.parse_status === "partial" ? "chip-medium" : "chip-critical"}`}>
-                      {a.parse_status}
-                    </span>
-                  </td>
-                  <td className="mono dim">{fmtBytes(a.size_bytes)}</td>
-                  <td className="mono" style={{ fontSize: 11,
-                    color: a.is_synthetic ? "var(--medium)" : "var(--fg-muted)" }}>
-                    {a.is_synthetic ? "yes" : "no"}
-                  </td>
-                  <td className="mono dim">{fmtTime(a.imported_at)}</td>
-                  <td className="mono faint" style={{ fontSize: 10 }} title={a.sha256 || ""}>
-                    {(a.sha256 || "—").slice(0, 24)}…
-                  </td>
-                  <td>
-                    <button className="btn btn-sm" disabled={busy === a.id}
-                      title="Delete this import and every event it produced, then rebuild alerts and the graph"
-                      onClick={() => void removeArtifact(a)}>
-                      {busy === a.id ? "…" : "Delete"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {error ? <div style={{ marginBottom: 16 }}><ErrorState message={error} onRetry={load} /></div> : null}
 
-      <div className="panel">
-        <div className="panel-head">
-          <span className="panel-title">Clear all imported data</span>
-        </div>
-        <div className="panel-body col" style={{ gap: 10 }}>
-          <span className="dim" style={{ fontSize: 12.5 }}>
-            Removes every imported event, alert, incident, graph node and artifact.
-            Detection rules and the {items.length ? "threat-intelligence indicators" : "IOC"} set
-            are kept. Use this when you imported the wrong file and want to start over.
+      <div className="tw-panel">
+        {loading ? <LoadingState label="Loading artifacts…" /> : (
+          <DataTable
+            columns={cols}
+            rows={items}
+            rowKey={(a) => a.id}
+            onRowClick={(a) => setSelected(a)}
+            selectedKey={selected?.id ?? null}
+            empty={<EmptyState title="No artifacts" detail="Import a file or load the demo dataset." />}
+          />
+        )}
+      </div>
+
+      <div className="tw-panel" style={{ marginTop: 16 }}>
+        <PanelHeader title="Clear imported data" />
+        <div className="tw-panel-body col" style={{ gap: 12 }}>
+          <span className="faint" style={{ fontSize: "var(--tw-fs-secondary)" }}>
+            Removes every imported event, alert, incident, graph node and artifact. Use this when you
+            imported the wrong file and want to start over.
           </span>
           <div className="row" style={{ gap: 8 }}>
-            <button className="btn btn-sm" disabled={resetting}
-              onClick={() => void clearAll(true)}>
-              {resetting ? "Clearing…" : "Clear data (keep IOCs)"}
-            </button>
-            <button className="btn btn-sm" disabled={resetting}
-              onClick={() => void clearAll(false)}>
-              {resetting ? "Clearing…" : "Clear data + IOCs"}
-            </button>
+            <button className="tw-btn tw-btn-sm" disabled={busy} onClick={() => clearAll(true)}>Clear data (keep IOCs)</button>
+            <button className="tw-btn tw-btn-sm tw-btn-danger" disabled={busy} onClick={() => clearAll(false)}>Clear data + IOCs</button>
           </div>
         </div>
       </div>
 
-      {items.some((a) => a.parse_status !== "ok") ? (
-        <div className="panel">
-          <div className="panel-head"><span className="panel-title">Parse notes</span></div>
-          <div className="panel-body" style={{ fontSize: 12 }}>
-            {items.filter((a) => a.parse_notes).map((a) => (
-              <div key={a.id} style={{ marginBottom: 8 }}>
-                <div className="mono" style={{ color: "var(--cyan-dim)", fontSize: 11 }}>{a.name}</div>
-                <div className="dim mono" style={{ fontSize: 10.5, wordBreak: "break-word" }}>
-                  {a.parse_notes}
-                </div>
+      {selected ? (
+        <div className="tw-drawer">
+          <InspectorPanel title="Artifact detail" onClose={() => setSelected(null)}
+            actions={
+              <button className="tw-btn tw-btn-sm tw-btn-danger tw-btn-icon" title="Delete artifact"
+                      aria-label="Delete artifact" disabled={busy}
+                      onClick={() => removeArtifact(selected)}>
+                {Icons.trash({ style: { width: 13, height: 13 } })}
+              </button>
+            }>
+            <div className="tw-inspector-title mono">{selected.name}</div>
+            <div className="row" style={{ gap: 7, marginTop: 8, flexWrap: "wrap" }}>
+              <StatusIndicator status={selected.parse_status} />
+              <span className="tw-chip tw-chip-plain">{selected.artifact_kind}</span>
+              {selected.is_synthetic ? <span className="tw-chip tw-sev tw-sev-medium">synthetic</span> : null}
+            </div>
+            <dl className="tw-kv" style={{ marginTop: 16 }}>
+              <dt>Source</dt><dd><SourceLabel>{selected.source_type}</SourceLabel></dd>
+              <dt>Records</dt><dd className="mono">{selected.record_ok} ok / {selected.record_failed} rejected / {selected.record_total} total</dd>
+              <dt>Size</dt><dd className="mono">{fmtBytes(selected.size_bytes)}</dd>
+              <dt>Imported</dt><dd className="mono">{fmtTime(selected.imported_at)}</dd>
+              <dt>Stored path</dt><dd className="mono" style={{ wordBreak: "break-all" }}>{selected.stored_path || "—"}</dd>
+            </dl>
+            <div style={{ marginTop: 16 }}>
+              <div className="tw-section-title">SHA-256</div>
+              <pre className="tw-code">{selected.sha256 || "(none recorded)"}</pre>
+            </div>
+            {selected.parse_notes ? (
+              <div style={{ marginTop: 16 }}>
+                <div className="tw-section-title">Parse notes</div>
+                <pre className="tw-code">{selected.parse_notes}</pre>
               </div>
-            ))}
-          </div>
+            ) : null}
+          </InspectorPanel>
         </div>
       ) : null}
-    </div>
+
+      <ConfirmDialog
+        open={!!confirm}
+        title={confirm?.title || ""}
+        body={confirm?.body || ""}
+        confirmLabel={confirm?.label}
+        danger
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => {
+          const c = confirm;
+          setConfirm(null);
+          if (c) void c.run().catch((e) => setError(e instanceof Error ? e.message : "Operation failed"))
+            .finally(() => setBusy(false));
+        }}
+      />
+    </>
   );
 }
 
-export function RulesPage({ onReanalyzed }: { onReanalyzed: () => void }) {
+/* ------------------------------------------------ Detection rules ------- */
+
+export function DetectionRules({ onReanalyzed }: { onReanalyzed: () => void }) {
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Rule | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const r = await api.rules();
@@ -196,9 +202,9 @@ export function RulesPage({ onReanalyzed }: { onReanalyzed: () => void }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load rules");
     } finally { setLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const toggle = async (id: string, enabled: boolean) => {
     setBusy(id);
@@ -212,50 +218,84 @@ export function RulesPage({ onReanalyzed }: { onReanalyzed: () => void }) {
     } finally { setBusy(null); }
   };
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorBanner message={error} onRetry={load} />;
+  const cols: Column<Rule>[] = [
+    { key: "id", header: "Rule", width: 70, render: (r) => <span className="mono" style={{ color: "var(--tw-primary)" }}>{r.id}</span> },
+    { key: "name", header: "Name", className: "primary", render: (r) => (
+      <span className="truncate" style={{ display: "block", maxWidth: 200 }} title={r.name}>{r.name}</span>) },
+    { key: "cat", header: "Category", width: 130, render: (r) => <span className="mono faint">{r.category}</span> },
+    { key: "sev", header: "Severity", width: 88, render: (r) => <SeverityIndicator severity={r.severity} /> },
+    { key: "status", header: "Status", width: 116, render: (r) => (
+      <label className="tw-switch" onClick={(e) => e.stopPropagation()} title={r.enabled ? "Disable rule" : "Enable rule"}>
+        <input type="checkbox" checked={r.enabled === 1} disabled={busy === r.id}
+               onChange={(e) => void toggle(r.id, e.target.checked)} />
+        <span className="tw-switch-track" />
+        <span className="tw-switch-label">{r.enabled ? "enabled" : "disabled"}</span>
+      </label>) },
+    { key: "desc", header: "Description", render: (r) => (
+      <span className="truncate" style={{ display: "block", maxWidth: 260 }} title={r.description}>{r.description}</span>) },
+  ];
 
   return (
-    <div className="col" style={{ gap: 12 }}>
-      <div className="banner banner-info">
+    <>
+      <PageHeader
+        title="Detection Rules"
+        subtitle="Deterministic functions over normalized events. Toggling one re-runs the full pipeline."
+      />
+      <div className="tw-banner tw-banner-info" style={{ marginBottom: 16 }}>
         <span>
-          Rules are deterministic functions over normalized events. Toggling one re-runs the
-          full pipeline immediately, so you can see exactly which alerts depend on it.
+          These are correlation heuristics with published logic. SentinelGraph does not claim zero-day
+          detection; each rule states the behaviour it matches and the thresholds it uses.
         </span>
       </div>
-      <div className="grid grid-2">
-        {rules.map((r) => (
-          <div key={r.id} className="panel" style={{ padding: 0 }}>
-            <div className="panel-head">
-              <span className="mono" style={{ color: "var(--cyan)", fontSize: 12 }}>{r.id}</span>
-              <SeverityChip severity={r.severity} />
-              <span className="spacer" />
-              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5 }}>
-                <input type="checkbox" checked={r.enabled === 1} disabled={busy === r.id}
-                       onChange={(e) => void toggle(r.id, e.target.checked)} />
-                {r.enabled ? "enabled" : "disabled"}
-              </label>
-            </div>
-            <div className="panel-body" style={{ fontSize: 12.5 }}>
-              <div style={{ fontWeight: 600, marginBottom: 5 }}>{r.name}</div>
-              <div className="dim" style={{ lineHeight: 1.6, marginBottom: 8 }}>{r.description}</div>
-              <div className="mono faint" style={{ fontSize: 10.5, marginBottom: 6 }}>
-                CATEGORY: {r.category} · v{r.version}
-              </div>
-              <div className="mono" style={{
-                fontSize: 10.5, background: "var(--bg)", padding: "7px 9px",
-                borderRadius: 4, color: "var(--fg-dim)", wordBreak: "break-word",
-              }}>
-                {r.logic}
-              </div>
-            </div>
-          </div>
-        ))}
+      {error ? <div style={{ marginBottom: 16 }}><ErrorState message={error} onRetry={load} /></div> : null}
+      <div className="tw-panel">
+        {loading ? <LoadingState label="Loading rules…" /> : (
+          <DataTable
+            columns={cols}
+            rows={rules}
+            rowKey={(r) => r.id}
+            onRowClick={(r) => setSelected(r)}
+            selectedKey={selected?.id ?? null}
+            empty={<EmptyState title="No rules registered" />}
+          />
+        )}
       </div>
-      <div className="dim" style={{ fontSize: 11.5, lineHeight: 1.6 }}>
-        These are correlation heuristics with published logic. SentinelGraph does not claim
-        zero-day detection; each rule states the behaviour it matches and the thresholds it uses.
-      </div>
-    </div>
+
+      {selected ? (
+        <div className="tw-drawer">
+          <InspectorPanel title="Rule detail" onClose={() => setSelected(null)}>
+            <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+              <span className="mono" style={{ color: "var(--tw-primary)" }}>{selected.id}</span>
+              <SeverityIndicator severity={selected.severity} />
+              <span className={`tw-chip tw-status tw-status-${selected.enabled ? "contained" : "closed"}`}>
+                {selected.enabled ? "enabled" : "disabled"}</span>
+            </div>
+            <div className="tw-inspector-title" style={{ marginTop: 10 }}>{selected.name}</div>
+            <p className="faint" style={{ fontSize: "var(--tw-fs-secondary)", lineHeight: 1.6, marginTop: 8 }}>{selected.description}</p>
+            <div className="tw-section-title" style={{ marginTop: 16 }}>Logic</div>
+            <pre className="tw-code">{selected.logic}</pre>
+            <dl className="tw-kv" style={{ marginTop: 16 }}>
+              <dt>Category</dt><dd>{selected.category}</dd>
+              <dt>Version</dt><dd className="mono">v{selected.version}</dd>
+            </dl>
+            {selected.attack?.length ? (
+              <div style={{ marginTop: 16 }}>
+                <div className="tw-section-title">MITRE ATT&amp;CK</div>
+                <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                  {selected.attack.map((t) => (
+                    <span key={t.id} className="tw-chip tw-chip-plain mono" title={t.tactic}>{t.id}</span>
+                  ))}
+                </div>
+              </div>
+            ) : selected.attack_note ? (
+              <div style={{ marginTop: 16 }}>
+                <div className="tw-section-title">MITRE ATT&amp;CK</div>
+                <p className="faint" style={{ fontSize: "var(--tw-fs-meta)", lineHeight: 1.5 }}>{selected.attack_note}</p>
+              </div>
+            ) : null}
+          </InspectorPanel>
+        </div>
+      ) : null}
+    </>
   );
 }

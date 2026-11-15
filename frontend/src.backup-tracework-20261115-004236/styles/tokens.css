@@ -1,0 +1,112 @@
+/* ==========================================================================
+   TRACEWORK — design tokens for SentinelGraph AI
+   An investigation workstation built around evidence, relationships, clarity.
+   Light theme. Warm neutral canvas, white working surfaces, deep ink type,
+   muted teal accent. Single source of truth for every colour, space and radius.
+   ========================================================================== */
+
+:root {
+  /* --- Canvas & surfaces ------------------------------------------------- */
+  --tw-canvas: #f2f4f1;
+  --tw-surface: #ffffff;
+  --tw-surface-muted: #f7f8f5;
+  --tw-surface-sunken: #ecefea;
+  --tw-surface-selected: #e8f1ed;
+
+  /* --- Text -------------------------------------------------------------- */
+  --tw-text-primary: #192421;
+  --tw-text-secondary: #465650;
+  --tw-text-muted: #65726d;
+  --tw-text-disabled: #a4ada7;
+  --tw-text-on-accent: #ffffff;
+
+  /* --- Borders ----------------------------------------------------------- */
+  --tw-border: #dce3de;
+  --tw-border-strong: #c7d2cb;
+  --tw-border-focus: #176b5b;
+
+  /* --- Brand ------------------------------------------------------------- */
+  --tw-primary: #176b5b;
+  --tw-primary-hover: #125548;
+  --tw-primary-soft: #e8f1ed;
+
+  /* --- Severity ---------------------------------------------------------- */
+  --tw-critical: #b63d49;
+  --tw-critical-bg: #fcebed;
+  --tw-high: #b9652e;
+  --tw-high-bg: #fbf0e8;
+  --tw-medium: #92721b;
+  --tw-medium-bg: #f7f3e3;
+  --tw-low: #3c7384;
+  --tw-low-bg: #eaf3f5;
+  --tw-info: #65726d;
+  --tw-info-bg: #f0f2ef;
+
+  /* --- Status ------------------------------------------------------------ */
+  --tw-success: #2f765a;
+  --tw-success-bg: #e7f1eb;
+  --tw-warning: #a77828;
+  --tw-warning-bg: #f7f1e2;
+  --tw-danger: #b63d49;
+  --tw-danger-bg: #fcebed;
+
+  /* --- Entity palette (graph nodes, entity indicators) ------------------- */
+  --tw-entity-host: #176b5b;
+  --tw-entity-user: #3c7384;
+  --tw-entity-process: #b9652e;
+  --tw-entity-file: #6b5aa6;
+  --tw-entity-domain: #2f765a;
+  --tw-entity-ip: #a77828;
+  --tw-entity-event: #65726d;
+  --tw-entity-alert: #b63d49;
+  --tw-entity-artifact: #5b6b7a;
+  --tw-entity-group: #8a9490;
+
+  /* --- Spacing scale ----------------------------------------------------- */
+  --tw-s1: 4px;
+  --tw-s2: 8px;
+  --tw-s3: 12px;
+  --tw-s4: 16px;
+  --tw-s5: 20px;
+  --tw-s6: 24px;
+  --tw-s7: 32px;
+  --tw-s8: 40px;
+  --tw-s9: 48px;
+  --tw-s10: 56px;
+
+  /* --- Radius ------------------------------------------------------------ */
+  --tw-r-sm: 4px;
+  --tw-r: 6px;
+  --tw-r-lg: 8px;
+
+  /* --- Type -------------------------------------------------------------- */
+  --tw-font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --tw-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas,
+    "Liberation Mono", monospace;
+
+  --tw-fs-page: 28px;
+  --tw-fs-section: 17px;
+  --tw-fs-body: 13.5px;
+  --tw-fs-secondary: 12.5px;
+  --tw-fs-meta: 11px;
+  --tw-fs-metric: 32px;
+
+  /* --- Elevation (overlays only) ----------------------------------------- */
+  --tw-shadow-sm: 0 1px 2px rgba(25, 36, 33, 0.06);
+  --tw-shadow-md: 0 6px 18px rgba(25, 36, 33, 0.1);
+  --tw-shadow-lg: 0 16px 40px rgba(25, 36, 33, 0.18);
+
+  /* --- Shell geometry ---------------------------------------------------- */
+  --tw-sidebar-w: 228px;
+  --tw-topbar-h: 64px;
+  --tw-content-pad: 30px;
+
+  /* --- Motion ------------------------------------------------------------ */
+  --tw-ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --tw-dur: 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --tw-dur: 0ms; }
+}

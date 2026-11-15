@@ -1,37 +1,49 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, type AiResult, type AiRun, type IncidentDetail, type GraphData } from "../api";
-import { AttackGraph } from "../components/AttackGraph";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Empty, ErrorBanner, Loading, SeverityChip, StatusChip, TsBadge, fmtBytes, fmtTime,
+  api, downloadReport,
+  type AiResult, type AiRun, type EventRow, type GraphData, type IncidentDetail,
+} from "../api";
+import { GraphCanvas } from "../components/GraphCanvas";
+import { NodeInspector } from "../components/NodeInspector";
+import { Tabs, DataTable, PanelHeader, FilterBar, type Column } from "../components/data";
+import {
+  EmptyState, ErrorState, LoadingState, SeverityIndicator, StatusIndicator,
+  EvidenceReference, SourceLabel, Timestamp, fmtBytes, fmtTime,
 } from "../components/ui";
+import { Icons } from "../components/icons";
+import {
+  Callout, Card, ChipTimeline, Donut, Stat, Stats, type ChipTimelineItem,
+} from "../components/widgets";
 
-interface Props {
-  incidentId: number | null;
-}
+const TABS = [
+  { key: "overview", label: "Overview" },
+  { key: "timeline", label: "Timeline" },
+  { key: "graph", label: "Attack graph" },
+  { key: "evidence", label: "Evidence" },
+  { key: "ai", label: "AI analysis" },
+  { key: "report", label: "Report" },
+] as const;
+type TabKey = typeof TABS[number]["key"];
 
-const TABS = ["Overview", "Attack graph", "Timeline", "Evidence", "AI analysis", "Report"] as const;
-type Tab = typeof TABS[number];
-
-export function IncidentView({ incidentId }: Props) {
+export function IncidentView({ incidentId }: { incidentId: number | null }) {
   const [detail, setDetail] = useState<IncidentDetail | null>(null);
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("Overview");
+  const [tab, setTab] = useState<TabKey>("overview");
+
   const [selectedNode, setSelectedNode] = useState<number | null>(null);
   const [showInferred, setShowInferred] = useState(true);
   const [nodeTypes, setNodeTypes] = useState<Set<string>>(new Set());
   const [showEvents, setShowEvents] = useState(false);
+  const [scoped, setScoped] = useState(false);
 
   const load = useCallback(async () => {
     if (!incidentId) { setDetail(null); return; }
     setLoading(true);
     setError(null);
     try {
-      const [d, g] = await Promise.all([
-        api.incident(incidentId),
-        api.graph({ include_inferred: true }),
-      ]);
+      const [d, g] = await Promise.all([api.incident(incidentId), api.graph({ include_inferred: true })]);
       setDetail(d);
       setGraph(g);
     } catch (e) {
@@ -43,17 +55,27 @@ export function IncidentView({ incidentId }: Props) {
 
   useEffect(() => { void load(); }, [load]);
 
+  const jumpToGraph = useCallback((eventId: number) => {
+    setShowEvents(true);
+    const node = graph?.nodes.find((n) => n.node_key === `event:${eventId}`);
+    setTab("graph");
+    setSelectedNode(node ? node.id : null);
+  }, [graph]);
+
   if (!incidentId) {
     return (
-      <Empty title="No incident selected"
-             detail="Pick an incident from the Incidents list to open the investigation workspace." />
+      <div className="tw-content">
+        <EmptyState title="No incident selected"
+                    detail="Pick an incident from the Incidents list to open the investigation workspace." />
+      </div>
     );
   }
-  if (loading && !detail) return <Loading label="Loading incident…" />;
-  if (error && !detail) return <ErrorBanner message={error} onRetry={load} />;
+  if (loading && !detail) return <div className="tw-content"><LoadingState label="Loading incident…" /></div>;
+  if (error && !detail) return <div className="tw-content"><ErrorState message={error} onRetry={load} /></div>;
   if (!detail) return null;
 
   const inc = detail.incident;
+  const hosts = [...new Set(detail.events.map((e) => e.host).filter(Boolean))] as string[];
 
   const setStatus = async (status: string) => {
     try {
@@ -64,188 +86,241 @@ export function IncidentView({ incidentId }: Props) {
     }
   };
 
+  const tabs = TABS.map((t) => ({
+    key: t.key, label: t.label,
+    count: t.key === "evidence" ? detail.events.length
+      : t.key === "timeline" ? detail.timeline.length
+      : t.key === "ai" ? detail.ai_runs.length : undefined,
+  }));
+
   return (
-    <div className="content flush">
-      <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid var(--line)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11, flexWrap: "wrap" }}>
-          <span className="mono" style={{ color: "var(--cyan)", fontSize: 13, fontWeight: 600 }}>
-            {inc.ref}
-          </span>
-          <SeverityChip severity={inc.severity} />
-          <span className="chip chip-info">{inc.status}</span>
-          <h2 style={{ fontSize: 15, margin: 0, fontWeight: 600, flex: 1, minWidth: 200 }}>
-            {inc.title}
-          </h2>
-          <select className="select" style={{ width: 150 }}
-                  value={inc.status}
-                  onChange={(e) => void setStatus(e.target.value)}>
-            <option value="open">open</option>
-            <option value="investigating">investigating</option>
-            <option value="contained">contained</option>
-            <option value="closed">closed</option>
-          </select>
+    <div className="tw-content-flush">
+      <div className="tw-inc-head">
+        <div className="tw-inc-head-row">
+          <span className="tw-inc-ref">{inc.ref}</span>
+          <SeverityIndicator severity={inc.severity} />
+          <StatusIndicator status={inc.status} />
+          <h1 className="tw-inc-title">{inc.title}</h1>
+          <label className="tw-check">
+            <span className="tw-sr">Incident status</span>
+            <select className="tw-select" style={{ width: 150 }} value={inc.status}
+                    onChange={(e) => void setStatus(e.target.value)}>
+              {["open", "investigating", "contained", "closed"].map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </label>
         </div>
-        <div className="mono faint" style={{ fontSize: 11, marginTop: 7 }}>
-          window {fmtTime(inc.first_ts)} → {fmtTime(inc.last_ts)} · {detail.alerts.length} alert(s) ·
-          {" "}{detail.events.length} evidence event(s)
+        <div className="tw-inc-meta">
+          <span>Window <b className="mono">{fmtTime(inc.first_ts)}</b> → <b className="mono">{fmtTime(inc.last_ts)}</b></span>
+          <span><b>{detail.alerts.length}</b> detection(s)</span>
+          <span><b>{detail.events.length}</b> evidence event(s)</span>
+          <span><b>{hosts.length}</b> affected asset(s)</span>
         </div>
       </div>
 
-      <div className="tabs">
-        {TABS.map((t) => (
-          <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
-            {t}
-            {t === "Evidence" ? <span className="count">{detail.events.length}</span> : null}
-            {t === "Timeline" ? <span className="count">{detail.timeline.length}</span> : null}
-            {t === "AI analysis" ? <span className="count">{detail.ai_runs.length}</span> : null}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
-      <div style={{ flex: 1, overflowY: tab === "Attack graph" ? "hidden" : "auto", padding: tab === "Attack graph" ? 0 : 20 }}>
-        {error ? <ErrorBanner message={error} onRetry={load} /> : null}
+      <div style={{ flex: 1, minHeight: 0, overflowY: tab === "graph" ? "hidden" : "auto",
+                    display: tab === "graph" ? "flex" : "block", flexDirection: "column" }}>
+        {error ? <div style={{ padding: 16 }}><ErrorState message={error} onRetry={load} /></div> : null}
 
-        {tab === "Overview" && <OverviewTab detail={detail} />}
-
-        {tab === "Attack graph" && (
-          <div style={{ display: "grid", gridTemplateColumns: selectedNode ? "1fr 380px" : "1fr", height: "100%" }}>
-            <div style={{ position: "relative", minWidth: 0, display: "flex", flexDirection: "column" }}>
-              <GraphToolbar
-                showInferred={showInferred}
-                setShowInferred={setShowInferred}
-                nodeTypes={nodeTypes}
-                setNodeTypes={setNodeTypes}
-                graph={graph}
-                showEvents={showEvents}
-                setShowEvents={setShowEvents}
-              />
-              <div style={{ flex: 1, minHeight: 0 }}>
-                {graph ? (
-                  <AttackGraph
-                    data={graph}
-                    selectedId={selectedNode}
-                    onSelect={setSelectedNode}
-                    showInferred={showInferred}
-                    highlightTypes={nodeTypes}
-                    showEvents={showEvents}
-                  />
-                ) : <Loading label="Building layout…" />}
-              </div>
-            </div>
-            {selectedNode ? (
-              <NodePanel nodeId={selectedNode} onClose={() => setSelectedNode(null)} />
-            ) : null}
+        {tab !== "graph" ? (
+          <div style={{ padding: 24 }}>
+            {tab === "overview" && <OverviewTab detail={detail} onOpenEvidence={jumpToGraph} />}
+            {tab === "timeline" && <TimelineTab detail={detail} onJumpToGraph={jumpToGraph} />}
+            {tab === "evidence" && <EvidenceTab detail={detail} />}
+            {tab === "ai" && <AiTab detail={detail} onReload={load} />}
+            {tab === "report" && <ReportTab incidentId={inc.id} />}
           </div>
+        ) : (
+          <>
+            <GraphToolbar
+              showInferred={showInferred} setShowInferred={setShowInferred}
+              showEvents={showEvents} setShowEvents={setShowEvents}
+              nodeTypes={nodeTypes} setNodeTypes={setNodeTypes}
+              graph={graph} scoped={scoped} setScoped={setScoped}
+            />
+            <div className={`tw-graph-shell ${selectedNode ? "with-inspector" : ""}`} style={{ flex: 1, minHeight: 0 }}>
+              {graph ? (
+                <GraphCanvas
+                  data={graph}
+                  selectedId={selectedNode}
+                  onSelect={setSelectedNode}
+                  showInferred={showInferred}
+                  highlightTypes={nodeTypes}
+                  showEvents={showEvents}
+                  focusHosts={scoped ? hosts : null}
+                  onClearFocus={() => setScoped(false)}
+                  onOpenEvidence={() => setTab("evidence")}
+                />
+              ) : (
+                <div className="tw-graph-canvas"><LoadingState label="Building layout…" /></div>
+              )}
+              {selectedNode ? <NodeInspector nodeId={selectedNode} onClose={() => setSelectedNode(null)} /> : null}
+            </div>
+          </>
         )}
-
-        {tab === "Timeline" && <TimelineTab detail={detail} />}
-        {tab === "Evidence" && <EvidenceTab detail={detail} />}
-        {tab === "AI analysis" && <AiTab detail={detail} onReload={load} />}
-        {tab === "Report" && <ReportTab incidentId={inc.id} />}
       </div>
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------- overview -- */
 
-function OverviewTab({ detail }: { detail: IncidentDetail }) {
+function OverviewTab({ detail, onOpenEvidence }: { detail: IncidentDetail; onOpenEvidence: (id: number) => void }) {
   const hosts = [...new Set(detail.events.map((e) => e.host).filter(Boolean))] as string[];
   const users = [...new Set(detail.events.map((e) => e.user_name).filter(Boolean))] as string[];
+  const evidenceCount = detail.alerts.reduce((n, a) => n + (a.evidence?.length || 0), 0);
+
+  const alertEventIds = new Set<number>();
+  for (const a of detail.alerts) for (const e of a.evidence || []) alertEventIds.add(e.id);
+
+  const sevCounts = detail.alerts.reduce<Record<string, number>>((acc, a) => {
+    acc[a.severity] = (acc[a.severity] || 0) + 1;
+    return acc;
+  }, {});
+
+  const timeline: ChipTimelineItem[] = detail.events.slice(0, 6).map((e) => ({
+    id: e.id,
+    time: (e.ts_utc || e.ts_raw || "").slice(11, 19) || "—",
+    text: (e.command_line || e.file_path || e.domain || e.process_name || e.action || e.event_type || "").slice(0, 64),
+    tone: alertEventIds.has(e.id) ? "var(--tw-critical)" : "var(--tw-low)",
+    chip: <span className="tw-chip tw-chip-plain">{alertEventIds.has(e.id) ? "Alert" : "Event"}</span>,
+  }));
+
+  const icon = (name: keyof typeof Icons) => Icons[name]({ style: { width: 16, height: 16 } });
 
   return (
-    <div className="col" style={{ gap: 14 }}>
-      <div className="banner banner-warn">
+    <div className="col" style={{ gap: 16 }}>
+      <div className="tw-banner tw-banner-warn">
         <span>
-          <strong>Evidence boundary.</strong> Rule-based findings below are deterministic
-          correlations over normalized events. They indicate suspicious behaviour; they do
-          <em> not</em> by themselves prove compromise or data exfiltration.
+          <strong>Evidence boundary.</strong> The findings below are deterministic correlations over
+          normalized events. They indicate suspicious behaviour; they do <em>not</em> by themselves
+          prove compromise or data exfiltration.
         </span>
       </div>
 
-      <div className="grid grid-3">
-        <div className="panel">
-          <div className="panel-head"><span className="panel-title">Affected assets</span></div>
-          <div className="panel-body" style={{ fontSize: 12.5 }}>
-            {hosts.length === 0 ? <span className="dim">none identified</span> :
-              hosts.map((h) => (
-                <div key={h} className="mono" style={{ marginBottom: 3, color: "var(--cyan-dim)" }}>{h}</div>
+      <div className="tw-inc-top">
+        <Card title="Incident summary" icon={icon("info")}>
+          <p className="dim" style={{ lineHeight: 1.65 }}>
+            {detail.alerts[0]?.narrative || detail.incident.title}
+          </p>
+          <div style={{ marginTop: 14 }}>
+            <Callout>
+              Investigated with {evidenceCount} evidence reference{evidenceCount === 1 ? "" : "s"}
+            </Callout>
+          </div>
+        </Card>
+
+        <Card title="Impacted assets" icon={icon("server")}>
+          <Stats>
+            <Stat value={hosts.length} label="Hosts" />
+            <Stat value={users.length} label="Users" />
+            <Stat value={detail.events.length} label="Events" />
+          </Stats>
+        </Card>
+
+        <Card title="Detection rules" icon={icon("rules")}>
+          {detail.alerts.length === 0 ? <span className="faint">none</span> : (
+            <div className="col" style={{ gap: 12 }}>
+              {detail.alerts.map((a) => (
+                <div key={a.id}>
+                  <div className="mono" style={{ color: "var(--tw-primary)", fontWeight: 600 }}>{a.rule_id}</div>
+                  <div style={{ fontSize: "var(--tw-fs-secondary)", color: "var(--tw-text-secondary)", lineHeight: 1.5 }}>
+                    {a.title}
+                  </div>
+                </div>
               ))}
-          </div>
-        </div>
-        <div className="panel">
-          <div className="panel-head"><span className="panel-title">Accounts involved</span></div>
-          <div className="panel-body" style={{ fontSize: 12.5 }}>
-            {users.length === 0 ? <span className="dim">none identified</span> :
-              users.map((u) => (
-                <div key={u} className="mono" style={{ marginBottom: 3 }}>{u}</div>
-              ))}
-          </div>
-        </div>
-        <div className="panel">
-          <div className="panel-head"><span className="panel-title">Status history</span></div>
-          <div className="panel-body" style={{ fontSize: 12, lineHeight: 1.8 }}>
-            {detail.status_history.map((h) => (
-              <div key={h.id}>
-                <span className="mono faint">{fmtTime(h.changed_at)}</span>
-                <br />
-                <span style={{ color: "var(--fg-dim)" }}>
-                  {h.from_status || "(new)"} → <strong>{h.to_status}</strong>
-                </span>
-                {h.note ? <div className="faint" style={{ fontSize: 11 }}>{h.note}</div> : null}
-              </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
+        </Card>
+
+        <Card title="Timeline" icon={icon("clock")}
+              action={<span className="faint" style={{ fontSize: "var(--tw-fs-meta)" }}>{detail.events.length} events</span>}>
+          {timeline.length === 0 ? <span className="faint">no events</span> : <ChipTimeline items={timeline} />}
+        </Card>
       </div>
 
-      <div className="panel">
-        <div className="panel-head">
-          <span className="panel-title">Findings — why this fired</span>
-          <span className="spacer" />
-          <span className="mono faint" style={{ fontSize: 10.5 }}>deterministic rule engine</span>
-        </div>
-        <div className="panel-body col" style={{ gap: 12 }}>
-          {detail.alerts.map((a) => (
-            <div key={a.id} style={{
-              borderLeft: `3px solid var(--${a.severity === "info" ? "info" : a.severity})`,
-              paddingLeft: 12, paddingBottom: 10,
-              borderBottom: "1px solid var(--line-soft)",
-            }}>
-              <div style={{ display: "flex", gap: 9, alignItems: "center", marginBottom: 5, flexWrap: "wrap" }}>
-                <span className="mono" style={{ color: "var(--cyan-dim)", fontSize: 11.5 }}>{a.rule_id}</span>
-                <SeverityChip severity={a.severity} />
-                <strong style={{ fontSize: 13 }}>{a.title}</strong>
-              </div>
-              <div style={{ fontSize: 12.5, color: "var(--fg-dim)", lineHeight: 1.65 }}>{a.narrative}</div>
-              {a.rule_logic ? (
-                <div className="mono faint" style={{ fontSize: 10.5, marginTop: 5 }}>
-                  logic: {a.rule_logic}
+      <div className="tw-inc-row2">
+        <Card title="Findings — why this fired" icon={icon("alert")}>
+          {detail.alerts.length === 0 ? <EmptyState title="No findings" /> : (
+            <div className="col" style={{ gap: 14 }}>
+              {detail.alerts.map((a) => (
+                <div key={a.id} className={`tw-finding tw-finding-${a.severity}`}>
+                  <div className="row" style={{ gap: 9, marginBottom: 6, flexWrap: "wrap" }}>
+                    <span className="mono" style={{ color: "var(--tw-primary)" }}>{a.rule_id}</span>
+                    <SeverityIndicator severity={a.severity} />
+                    <span className="tw-finding-title">{a.title}</span>
+                  </div>
+                  <div className="tw-finding-narrative">{a.narrative}</div>
+                  {a.rule_logic ? (
+                    <div className="mono faint" style={{ marginTop: 6 }}>logic: {a.rule_logic}</div>
+                  ) : null}
+                  <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                    <span className="faint" style={{ fontSize: "var(--tw-fs-meta)" }}>supporting events</span>
+                    {a.evidence.length === 0 ? <span className="faint mono">none</span>
+                      : a.evidence.map((e) => (
+                        <EvidenceReference key={e.id} id={e.id} onOpen={onOpenEvidence} />
+                      ))}
+                  </div>
                 </div>
-              ) : null}
-              <div className="mono" style={{ fontSize: 11, marginTop: 6, color: "var(--cyan-dim)" }}>
-                supporting events: {a.evidence.map((e) => `#${e.id}`).join(", ") || "none"}
-              </div>
+              ))}
             </div>
-          ))}
+          )}
+        </Card>
+
+        <div className="tw-inc-side">
+          <Card title="Detection posture" icon={icon("target")}>
+            {detail.alerts.length === 0 ? <span className="faint">no findings</span> : (
+              <Donut
+                caption="Total alerts"
+                center={detail.alerts.length}
+                slices={(["critical", "high", "medium", "low"] as const)
+                  .filter((s) => sevCounts[s])
+                  .map((s) => ({
+                    label: s[0].toUpperCase() + s.slice(1),
+                    value: sevCounts[s] || 0,
+                    color: `var(--tw-${s})`,
+                  }))}
+              />
+            )}
+          </Card>
+
+          <Card title="Investigation status" icon={icon("eye")}>
+            {detail.status_history.length === 0 ? <span className="faint">no changes recorded</span> : (
+              <div className="col" style={{ gap: 10 }}>
+                {detail.status_history.map((h) => (
+                  <div key={h.id} style={{ fontSize: "var(--tw-fs-secondary)" }}>
+                    <span className="mono faint">{fmtTime(h.changed_at)}</span>
+                    <div>{h.from_status || "(new)"} → <strong>{h.to_status}</strong></div>
+                    {h.note ? <div className="faint" style={{ fontSize: "var(--tw-fs-meta)" }}>{h.note}</div> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
         </div>
       </div>
     </div>
   );
 }
 
-function GraphToolbar({ showInferred, setShowInferred, nodeTypes, setNodeTypes, graph,
-                        showEvents, setShowEvents }: {
+/* ---------------------------------------------------------- graph chrome -- */
+
+function GraphToolbar({
+  showInferred, setShowInferred, showEvents, setShowEvents,
+  nodeTypes, setNodeTypes, graph, scoped, setScoped,
+}: {
   showInferred: boolean; setShowInferred: (v: boolean) => void;
-  nodeTypes: Set<string>; setNodeTypes: (s: Set<string>) => void;
-  graph: GraphData | null;
   showEvents: boolean; setShowEvents: (v: boolean) => void;
+  nodeTypes: Set<string>; setNodeTypes: (s: Set<string>) => void;
+  graph: GraphData | null; scoped: boolean; setScoped: (v: boolean) => void;
 }) {
   const types = useMemo(() => {
     const s = new Set<string>();
     graph?.nodes.forEach((n) => s.add(n.node_type));
     return [...s].sort();
   }, [graph]);
+  const inferredCount = graph?.edges.filter((e) => e.status === "inferred").length ?? 0;
 
   const toggle = (t: string) => {
     const next = new Set(nodeTypes);
@@ -253,247 +328,139 @@ function GraphToolbar({ showInferred, setShowInferred, nodeTypes, setNodeTypes, 
     setNodeTypes(next);
   };
 
-  const inferredCount = graph?.edges.filter((e) => e.status === "inferred").length ?? 0;
-
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 12, padding: "9px 14px",
-      borderBottom: "1px solid var(--line)", background: "var(--bg-elevated)", flexWrap: "wrap",
-    }}>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
-        <input type="checkbox" checked={showInferred}
-               onChange={(e) => setShowInferred(e.target.checked)} />
-        Show inferred edges
-        <span className="mono faint" style={{ fontSize: 10.5 }}>({inferredCount})</span>
+    <div className="tw-graph-toolbar">
+      <label className="tw-check">
+        <input type="checkbox" checked={showInferred} onChange={(e) => setShowInferred(e.target.checked)} />
+        Show inferred edges <span className="faint mono">({inferredCount})</span>
       </label>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
-        <input type="checkbox" checked={showEvents}
-               onChange={(e) => setShowEvents(e.target.checked)} />
+      <label className="tw-check">
+        <input type="checkbox" checked={showEvents} onChange={(e) => setShowEvents(e.target.checked)} />
         Show event nodes
       </label>
-      <span style={{ width: 1, height: 16, background: "var(--line)" }} />
-      <span className="faint" style={{ fontSize: 11 }}>Filter types:</span>
+      <label className="tw-check">
+        <input type="checkbox" checked={scoped} onChange={(e) => setScoped(e.target.checked)} />
+        Scope to this incident
+      </label>
+      <span style={{ width: 1, height: 16, background: "var(--tw-border)" }} />
+      <span className="faint" style={{ fontSize: "var(--tw-fs-meta)" }}>Filter types</span>
       {types.map((t) => (
-        <button
-          key={t}
-          className={`chip ${nodeTypes.has(t) ? "chip-observed" : "chip-info"}`}
-          style={{ cursor: "pointer", border: "1px solid var(--line)" }}
-          onClick={() => toggle(t)}
-        >
+        <button key={t} className={`tw-chip tw-chip-plain tw-rel-chip ${nodeTypes.has(t) ? "off" : ""}`}
+                style={{ cursor: "pointer", textTransform: "none" }}
+                onClick={() => toggle(t)}>
           {t}
         </button>
       ))}
       {nodeTypes.size > 0 ? (
-        <button className="btn btn-sm" onClick={() => setNodeTypes(new Set())}>clear</button>
+        <button className="tw-btn tw-btn-sm" onClick={() => setNodeTypes(new Set())}>Clear filter</button>
       ) : null}
     </div>
   );
 }
 
-function NodePanel({ nodeId, onClose }: { nodeId: number; onClose: () => void }) {
-  const [data, setData] = useState<Awaited<ReturnType<typeof api.nodeDetail>> | null>(null);
-  const [error, setError] = useState<string | null>(null);
+/* ------------------------------------------------------------- timeline -- */
 
-  useEffect(() => {
-    let alive = true;
-    setData(null);
-    setError(null);
-    api.nodeDetail(nodeId)
-      .then((d) => { if (alive) setData(d); })
-      .catch((e) => { if (alive) setError(e instanceof Error ? e.message : "Failed"); });
-    return () => { alive = false; };
-  }, [nodeId]);
-
-  return (
-    <div style={{
-      borderLeft: "1px solid var(--line)", background: "var(--bg-elevated)",
-      overflowY: "auto", display: "flex", flexDirection: "column",
-    }}>
-      <div className="panel-head" style={{ position: "sticky", top: 0, background: "var(--bg-elevated)", zIndex: 2 }}>
-        <span className="panel-title">Node detail</span>
-        <span className="spacer" />
-        <button className="btn btn-sm btn-icon" onClick={onClose}>✕</button>
-      </div>
-      {error ? <div style={{ padding: 14 }}><ErrorBanner message={error} /></div> : null}
-      {!data && !error ? <Loading /> : null}
-      {data ? (
-        <div style={{ padding: 14, fontSize: 12.5 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 3, wordBreak: "break-word" }}>
-            {data.node.label}
-          </div>
-          <div className="mono faint" style={{ fontSize: 10.5, marginBottom: 10 }}>
-            {data.node.node_type} · {data.node.node_key}
-          </div>
-          {data.node.severity ? (
-            <div style={{ marginBottom: 10 }}><SeverityChip severity={data.node.severity} /></div>
-          ) : null}
-
-          {data.node.attributes && Object.keys(data.node.attributes).length > 0 ? (
-            <div className="panel" style={{ padding: 9, marginBottom: 12, background: "var(--panel)" }}>
-              <div className="mono" style={{ fontSize: 10.5, color: "var(--fg-muted)", marginBottom: 4 }}>
-                ATTRIBUTES
-              </div>
-              <pre className="mono" style={{ margin: 0, fontSize: 10.5, whiteSpace: "pre-wrap",
-                                             color: "var(--fg-dim)" }}>
-                {JSON.stringify(data.node.attributes, null, 1)}
-              </pre>
-            </div>
-          ) : null}
-
-          <Section title={`Incoming relations (${data.incoming.length})`}>
-            {data.incoming.map((e) => (
-              <div key={e.id} style={{ marginBottom: 7, fontSize: 11.5 }}>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                  <span className="mono" style={{ color: "var(--cyan-dim)" }}>{e.src_label}</span>
-                  <span className="faint">→ {e.relation} →</span>
-                </div>
-                <div style={{ marginTop: 2 }}>
-                  <StatusChip status={e.status as "observed" | "inferred"} />
-                  <span className="faint" style={{ fontSize: 10.5, marginLeft: 6 }}>{e.method}</span>
-                </div>
-                <div className="mono" style={{ fontSize: 10, marginTop: 3 }}>
-                  {e.evidence_event_ids && e.evidence_event_ids.length > 0 ? (
-                    <span style={{ color: "var(--green)" }}>
-                      evidence: {e.evidence_event_ids.map((x) => `#${x}`).join(", ")}
-                    </span>
-                  ) : (
-                    <span className="faint">derived relation — no single source event</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {data.incoming.length === 0 ? <span className="faint">none</span> : null}
-          </Section>
-
-          <Section title={`Outgoing relations (${data.outgoing.length})`}>
-            {data.outgoing.map((e) => (
-              <div key={e.id} style={{ marginBottom: 7, fontSize: 11.5 }}>
-                <div className="faint">→ {e.relation} →</div>
-                <div className="mono" style={{ color: "var(--cyan-dim)" }}>{e.dst_label}</div>
-                <div style={{ marginTop: 2 }}>
-                  <StatusChip status={e.status as "observed" | "inferred"} />
-                  <span className="faint" style={{ fontSize: 10.5, marginLeft: 6 }}>{e.method}</span>
-                </div>
-                <div className="mono" style={{ fontSize: 10, marginTop: 3 }}>
-                  {e.evidence_event_ids && e.evidence_event_ids.length > 0 ? (
-                    <span style={{ color: "var(--green)" }}>
-                      evidence: {e.evidence_event_ids.map((x) => `#${x}`).join(", ")}
-                    </span>
-                  ) : (
-                    <span className="faint">derived relation — no single source event</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {data.outgoing.length === 0 ? <span className="faint">none</span> : null}
-          </Section>
-
-          <Section title={`Supporting events (${data.evidence.length})`}>
-            {data.evidence.slice(0, 20).map((ev) => (
-              <div key={ev.id} style={{
-                marginBottom: 6, paddingBottom: 6, borderBottom: "1px solid var(--line-soft)",
-                fontSize: 11,
-              }}>
-                <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
-                  <span className="mono" style={{ color: "var(--cyan-dim)" }}>#{ev.id}</span>
-                  <TsBadge status={ev.ts_status} raw={ev.ts_utc} />
-                </div>
-                <div className="mono faint" style={{ fontSize: 10.5, wordBreak: "break-all" }}>
-                  {ev.event_type} · {ev.host || "?"}
-                  {ev.process_name ? ` · ${ev.process_name}` : ""}
-                </div>
-              </div>
-            ))}
-            {data.evidence.length === 0 ? <span className="faint">No event evidence linked.</span> : null}
-          </Section>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div className="mono" style={{
-        fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase",
-        color: "var(--fg-muted)", marginBottom: 6, fontWeight: 650,
-      }}>
-        {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function TimelineTab({ detail }: { detail: IncidentDetail }) {
+function TimelineTab({ detail, onJumpToGraph }: { detail: IncidentDetail; onJumpToGraph: (id: number) => void }) {
   const [hostFilter, setHostFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [sevFilter, setSevFilter] = useState("");
+  const [q, setQ] = useState("");
+  const [expanded, setExpanded] = useState<number | null>(null);
 
   const hosts = [...new Set(detail.timeline.map((t) => t.host).filter(Boolean))] as string[];
   const types = [...new Set(detail.timeline.map((t) => t.event_type))].sort();
 
-  const rows = detail.timeline.filter(
-    (t) => (!hostFilter || t.host === hostFilter) && (!typeFilter || t.event_type === typeFilter),
-  );
+  const rows = detail.timeline.filter((t) => {
+    if (hostFilter && t.host !== hostFilter) return false;
+    if (typeFilter && t.event_type !== typeFilter) return false;
+    if (sevFilter && (t.severity || "info") !== sevFilter) return false;
+    if (q && !`${t.event_type} ${t.detail || ""} ${t.host || ""} ${t.user || ""}`
+      .toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
 
   return (
-    <div className="col" style={{ gap: 12 }}>
-      <div className="row" style={{ flexWrap: "wrap" }}>
-        <select className="select" style={{ width: 180 }} value={hostFilter}
-                onChange={(e) => setHostFilter(e.target.value)}>
+    <div className="col" style={{ gap: 16 }}>
+      <FilterBar>
+        <input className="tw-input" style={{ width: 200 }} placeholder="Search events…"
+               value={q} onChange={(e) => setQ(e.target.value)} />
+        <select className="tw-select" style={{ width: 170 }} value={hostFilter}
+                onChange={(e) => setHostFilter(e.target.value)} aria-label="Filter by host">
           <option value="">All hosts</option>
           {hosts.map((h) => <option key={h} value={h}>{h}</option>)}
         </select>
-        <select className="select" style={{ width: 180 }} value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}>
+        <select className="tw-select" style={{ width: 170 }} value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by event type">
           <option value="">All event types</option>
           {types.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <span className="faint mono" style={{ fontSize: 11 }}>
-          {rows.length} of {detail.timeline.length} events
-        </span>
-      </div>
+        <select className="tw-select" style={{ width: 150 }} value={sevFilter}
+                onChange={(e) => setSevFilter(e.target.value)} aria-label="Filter by severity">
+          <option value="">All severities</option>
+          {["critical", "high", "medium", "low", "info"].map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <span className="faint mono">{rows.length} of {detail.timeline.length}</span>
+      </FilterBar>
 
-      <div className="panel">
-        {rows.length === 0 ? <Empty title="No events match the filter" /> : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 230 }}>Time (UTC)</th>
-                <th style={{ width: 130 }}>Host</th>
-                <th style={{ width: 110 }}>User</th>
-                <th style={{ width: 130 }}>Event</th>
-                <th>Detail</th>
-                <th style={{ width: 56 }}>ID</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((t) => (
-                <tr key={t.id}>
-                  <td><TsBadge status={t.ts_status} raw={t.ts_utc || t.ts_raw} /></td>
-                  <td className="mono dim">{t.host || "—"}</td>
-                  <td className="mono dim">{t.user || "—"}</td>
-                  <td className="mono" style={{ fontSize: 11 }}>{t.event_type}</td>
-                  <td className="mono truncate" style={{ maxWidth: 420, fontSize: 11 }}
-                      title={t.detail || ""}>
-                    {t.detail || "—"}
-                  </td>
-                  <td className="mono" style={{ color: "var(--cyan-dim)" }}>#{t.id}</td>
+      <div className="tw-panel">
+        {rows.length === 0 ? <EmptyState title="No events match the filter" /> : (
+          <div className="tw-table-wrap">
+            <table className="tw-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 168 }}>Timestamp</th>
+                  <th style={{ width: 140 }}>Host</th>
+                  <th style={{ width: 120 }}>User</th>
+                  <th style={{ width: 110 }}>Severity</th>
+                  <th style={{ width: 140 }}>Event type</th>
+                  <th>Detail</th>
+                  <th style={{ width: 130 }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((t) => (
+                  <Fragment key={t.id}>
+                    <tr className="clickable"
+                        onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
+                      <td><Timestamp status={t.ts_status} raw={t.ts_utc || t.ts_raw} /></td>
+                      <td className="mono">{t.host || "—"}</td>
+                      <td className="mono">{t.user || "—"}</td>
+                      <td>{t.severity ? <SeverityIndicator severity={t.severity} /> : <span className="faint">—</span>}</td>
+                      <td className="mono">{t.event_type}</td>
+                      <td className="truncate" style={{ maxWidth: 380 }} title={t.detail || ""}>
+                        {t.detail || "—"} <SourceLabel>{t.source}</SourceLabel>
+                      </td>
+                      <td>
+                        <button className="tw-btn tw-btn-sm" onClick={(e) => { e.stopPropagation(); onJumpToGraph(t.id); }}>
+                          Graph →
+                        </button>
+                      </td>
+                    </tr>
+                    {expanded === t.id ? (
+                      <tr key={`${t.id}-raw`}>
+                        <td colSpan={7} style={{ background: "var(--tw-surface-muted)" }}>
+                          <div className="tw-section-title">Raw event #{t.id}</div>
+                          <pre className="tw-raw">{prettyRaw(detail.events.find((e) => e.id === t.id)?.raw ?? null)}</pre>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
   );
 }
 
+/* ------------------------------------------------------------- evidence -- */
+
 function EvidenceTab({ detail }: { detail: IncidentDetail }) {
   const [expanded, setExpanded] = useState<number | null>(null);
   const byEvent = useMemo(() => {
-    const m = new Map<number, { event: typeof detail.events[0]; alerts: string[] }>();
+    const m = new Map<number, { event: EventRow; alerts: string[] }>();
     for (const a of detail.alerts) {
       for (const e of a.evidence || []) {
         if (!m.has(e.id)) m.set(e.id, { event: e, alerts: [] });
@@ -503,75 +470,45 @@ function EvidenceTab({ detail }: { detail: IncidentDetail }) {
     return m;
   }, [detail]);
 
+  const cols: Column<{ event: EventRow; alerts: string[] }>[] = [
+    { key: "id", header: "Event", width: 66, render: (r) => <EvidenceReference id={r.event.id} /> },
+    { key: "ts", header: "Timestamp", width: 172, render: (r) => <Timestamp status={r.event.ts_status} raw={r.event.ts_utc || r.event.ts_raw} /> },
+    { key: "host", header: "Host", width: 130, render: (r) => <span className="mono">{r.event.host || "—"}</span> },
+    { key: "type", header: "Event type", width: 140, render: (r) => <span className="mono">{r.event.event_type}</span> },
+    { key: "supports", header: "Supports", width: 120, render: (r) => <span className="mono" style={{ color: "var(--tw-primary)" }}>{r.alerts.join(", ")}</span> },
+    { key: "detail", header: "Detail", render: (r) => (
+      <span className="mono truncate" style={{ display: "block", maxWidth: 380 }}>
+        {r.event.command_line || r.event.file_path || r.event.domain || r.event.process_name || r.event.action || "—"}
+      </span>) },
+  ];
+
   return (
-    <div className="col" style={{ gap: 12 }}>
-      <div className="banner banner-info">
+    <div className="col" style={{ gap: 16 }}>
+      <div className="tw-banner tw-banner-info">
         <span>
-          Each row is a raw event that supports at least one finding. Expand a row to see the
-          original record exactly as it was stored after normalization.
+          Each row is a raw event that supports at least one finding. Expand a row to see the record
+          exactly as it was stored after normalization.
         </span>
       </div>
-      <div className="panel">
-        <div className="panel-head">
-          <span className="panel-title">Evidence events</span>
-          <span className="spacer" />
-          <span className="mono faint" style={{ fontSize: 10.5 }}>
-            {byEvent.size} unique event(s)
-          </span>
-        </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th style={{ width: 56 }}>ID</th>
-              <th style={{ width: 170 }}>Time</th>
-              <th style={{ width: 120 }}>Host</th>
-              <th style={{ width: 120 }}>Event type</th>
-              <th style={{ width: 120 }}>Supports</th>
-              <th>Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...byEvent.values()].map(({ event, alerts }) => (
-              <>
-                <tr key={event.id} className="clickable"
-                    onClick={() => setExpanded(expanded === event.id ? null : event.id)}>
-                  <td className="mono" style={{ color: "var(--cyan-dim)" }}>#{event.id}</td>
-                  <td><TsBadge status={event.ts_status} raw={event.ts_utc || event.ts_raw} /></td>
-                  <td className="mono dim">{event.host || "—"}</td>
-                  <td className="mono" style={{ fontSize: 11 }}>{event.event_type}</td>
-                  <td className="mono" style={{ fontSize: 10.5, color: "var(--cyan-dim)" }}>
-                    {alerts.join(", ")}
-                  </td>
-                  <td className="mono truncate" style={{ maxWidth: 380, fontSize: 11 }}>
-                    {event.command_line || event.file_path || event.domain ||
-                     event.process_name || event.action || "—"}
-                  </td>
-                </tr>
-                {expanded === event.id ? (
-                  <tr key={`${event.id}-raw`}>
-                    <td colSpan={6} style={{ background: "var(--bg)", padding: 12 }}>
-                      <div className="mono" style={{ fontSize: 10.5, color: "var(--fg-muted)",
-                                                     marginBottom: 5 }}>
-                        RAW RECORD (as stored)
-                      </div>
-                      <pre className="mono" style={{
-                        margin: 0, fontSize: 10.5, whiteSpace: "pre-wrap",
-                        color: "var(--fg-dim)", maxHeight: 260, overflow: "auto",
-                      }}>
-                        {prettyRaw(event.raw)}
-                      </pre>
-                      <div className="mono faint" style={{ fontSize: 10.5, marginTop: 7 }}>
-                        ts_raw={event.ts_raw || "(none)"} · ts_status={event.ts_status} ·
-                        bytes_out={fmtBytes(event.bytes_out)}
-                      </div>
-                    </td>
-                  </tr>
-                ) : null}
-              </>
-            ))}
-          </tbody>
-        </table>
-        {byEvent.size === 0 ? <Empty title="No linked evidence" /> : null}
+      <div className="tw-panel">
+        <PanelHeader title="Evidence events" sub={`${byEvent.size} unique event(s)`} />
+        <DataTable
+          columns={cols}
+          rows={[...byEvent.values()]}
+          rowKey={(r) => r.event.id}
+          selectedKey={expanded}
+          onRowClick={(r) => setExpanded(expanded === r.event.id ? null : r.event.id)}
+          empty={<EmptyState title="No linked evidence" />}
+        />
+        {expanded != null ? (
+          <div style={{ padding: 16, borderTop: "1px solid var(--tw-border)" }}>
+            <div className="tw-section-title">Raw record — event #{expanded}</div>
+            <pre className="tw-raw">{prettyRaw(byEvent.get(expanded)?.event.raw ?? null)}</pre>
+            <div className="mono faint" style={{ marginTop: 8 }}>
+              ts_status={byEvent.get(expanded)?.event.ts_status} · bytes_out={fmtBytes(byEvent.get(expanded)?.event.bytes_out)}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -581,6 +518,8 @@ function prettyRaw(raw: string | null): string {
   if (!raw) return "(no raw record stored)";
   try { return JSON.stringify(JSON.parse(raw), null, 2); } catch { return raw; }
 }
+
+/* ------------------------------------------------------------- ai tab --- */
 
 function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
@@ -596,14 +535,12 @@ function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => P
     setBusy(true); setMsg(null); setIssues([]); setErrorCat(null);
     try {
       const r = await api.analyzeIncident(detail.incident.id);
-      if (r.status === "no_provider") {
-        setMsg(r.message || "No AI provider configured.");
-      } else if (r.status === "error") {
+      if (r.status === "no_provider") setMsg(r.message || "No AI provider configured.");
+      else if (r.status === "error") {
         setErrorCat(r.error_category || "error");
         setMsg(r.error_message || "Provider call failed.");
       } else if (r.status === "validation_failed") {
-        setMsg("The model returned output that did not match the required schema. "
-             + "It was NOT applied as findings.");
+        setMsg("The model returned output that did not match the required schema. It was NOT applied as findings.");
         setIssues(r.issues || []);
       } else {
         setMsg(`Analysis complete with ${r.provider}/${r.model} (${r.latency_ms} ms).`);
@@ -612,133 +549,95 @@ function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => P
       await onReload();
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Analysis failed");
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
 
   return (
-    <div className="col" style={{ gap: 14 }}>
-      <div className="banner banner-warn">
+    <div className="col" style={{ gap: 18 }}>
+      <div className="tw-banner tw-banner-warn">
         <span>
-          <strong>AI output is interpretation, not evidence.</strong> Only the events in this
-          incident are sent, and every referenced event ID is verified against the database
-          before storage. Invented references are stripped and reported.
+          <strong>AI output is interpretation, not evidence.</strong> Only the events in this incident
+          are sent, and every referenced event ID is verified against the database before storage.
+          Invented references are stripped and reported.
         </span>
       </div>
 
-      <div className="panel">
-        <div className="panel-head">
-          <span className="panel-title">Run analysis</span>
-          <span className="spacer" />
-          <span className="mono faint" style={{ fontSize: 10.5 }}>
-            provider: {detail.ai_status.mode === "ai_enabled"
-              ? `${detail.ai_status.provider}/${detail.ai_status.model}`
-              : "none (core mode)"}
-          </span>
-          <button className="btn btn-primary btn-sm" onClick={() => void run()} disabled={busy}>
-            {busy ? "Running…" : "Analyze with AI"}
-          </button>
-        </div>
-        <div className="panel-body" style={{ fontSize: 12.5 }}>
+      <div className="tw-panel">
+        <PanelHeader title="Run analysis"
+          sub={detail.ai_status.mode === "ai_enabled"
+            ? `provider: ${detail.ai_status.provider}/${detail.ai_status.model}`
+            : "no provider — core mode"}
+          actions={
+            <button className="tw-btn tw-btn-sm tw-btn-primary" onClick={() => void run()} disabled={busy}>
+              {busy ? "Running…" : "Analyze with AI"}
+            </button>
+          } />
+        <div className="tw-panel-body faint" style={{ fontSize: "var(--tw-fs-secondary)", lineHeight: 1.6 }}>
           {detail.ai_status.mode !== "ai_enabled" ? (
-            <div className="dim">
-              No AI provider is active. Configure one under <strong>AI Providers</strong>, or
-              continue using the deterministic engine — detection, correlation, graph, timeline
-              and reports all work without AI.
-            </div>
+            <>No AI provider is active. Configure one under <strong>AI Providers</strong>, or continue
+              using the deterministic engine — detection, correlation, graph, timeline and reports all
+              work without AI.</>
           ) : (
-            <div className="dim">
-              Model: <span className="mono">{detail.ai_status.model}</span>
+            <>Model: <span className="mono">{detail.ai_status.model}</span>
               {detail.ai_status.last_test_status
-                ? <span className="faint"> · last connection test: {detail.ai_status.last_test_status}</span>
-                : null}
-            </div>
+                ? <span className="faint"> · last connection test: {detail.ai_status.last_test_status}</span> : null}</>
           )}
         </div>
       </div>
 
       {msg ? (
-        <div className={`banner ${errorCat ? "banner-err" : "banner-info"}`}>
+        <div className={`tw-banner ${errorCat ? "tw-banner-err" : "tw-banner-info"}`}>
           <span>{msg}{errorCat ? ` (${errorCat})` : ""}</span>
         </div>
       ) : null}
 
       {issues.length > 0 ? (
-        <div className="banner banner-warn">
+        <div className="tw-banner tw-banner-warn">
           <div>
-            <strong>Validation notes:</strong>
-            <ul style={{ margin: "6px 0 0 16px", padding: 0 }}>
-              {issues.map((i, k) => <li key={k}>{i}</li>)}
-            </ul>
+            <strong>Validation notes</strong>
+            <ul style={{ margin: "6px 0 0 16px", padding: 0 }}>{issues.map((i, k) => <li key={k}>{i}</li>)}</ul>
           </div>
         </div>
       ) : null}
 
       {result ? (
-        <div className="col" style={{ gap: 12 }}>
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-title">Summary</span>
-              <span className="spacer" />
-              <span className="mono faint" style={{ fontSize: 10.5 }}>
-                {latest.provider}/{latest.model} · {latest.latency_ms} ms
-              </span>
-            </div>
-            <div className="panel-body" style={{ fontSize: 13, lineHeight: 1.7 }}>
-              {result.summary || <span className="dim">(empty)</span>}
-              <div className="dim" style={{ fontSize: 11.5, marginTop: 9, fontStyle: "italic" }}>
-                Summary is free-form model text and is not verified against the event
-                store. Only hypotheses carrying event citations were checked.
+        <>
+          <div className="tw-panel">
+            <PanelHeader title="Summary" sub={`${latest.provider}/${latest.model} · ${latest.latency_ms} ms`} />
+            <div className="tw-panel-body" style={{ lineHeight: 1.7 }}>
+              {result.summary || <span className="faint">(empty)</span>}
+              <div className="faint" style={{ fontSize: "var(--tw-fs-meta)", marginTop: 10, fontStyle: "italic" }}>
+                Summary is free-form model text and is not verified against the event store. Only
+                hypotheses carrying event citations were checked.
               </div>
               {result.timeline_interpretation ? (
-                <div style={{ marginTop: 10, color: "var(--fg-dim)" }}>
-                  <strong style={{ fontSize: 11.5, letterSpacing: 0.5,
-                                   textTransform: "uppercase", color: "var(--fg-muted)" }}>
-                    Timeline interpretation
-                  </strong>
-                  <div style={{ marginTop: 3 }}>{result.timeline_interpretation}</div>
+                <div style={{ marginTop: 12, color: "var(--tw-text-secondary)" }}>
+                  <div className="tw-section-title">Timeline interpretation</div>
+                  {result.timeline_interpretation}
                 </div>
               ) : null}
             </div>
           </div>
 
           {result.hypotheses.length > 0 ? (
-            <div className="panel">
-              <div className="panel-head"><span className="panel-title">Hypotheses</span></div>
-              <div className="panel-body col" style={{ gap: 11 }}>
+            <div className="tw-panel">
+              <PanelHeader title="Hypotheses" sub="AI-generated — distinct from observed facts" />
+              <div className="tw-panel-body col" style={{ gap: 14 }}>
                 {result.hypotheses.map((h, i) => (
-                  <div key={i} style={{
-                    borderLeft: "3px solid var(--purple)", paddingLeft: 11,
-                  }}>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
-                      <span className={`chip ${h.confidence === "high" ? "chip-high"
-                        : h.confidence === "medium" ? "chip-medium" : "chip-info"}`}>
-                        {h.confidence} confidence
-                      </span>
-                      {h.evidence_status === "unsupported" ? (
-                        <span className="chip chip-high"
-                              title="Every citation from the model referenced events that do not exist in this incident. Treat as an unverified claim.">
-                          no surviving evidence
-                        </span>
-                      ) : h.evidence_status === "contested" ? (
-                        <span className="chip chip-medium">evidence contested</span>
-                      ) : h.evidence_status === "supported" ? (
-                        <span className="chip chip-observed">evidence-linked</span>
-                      ) : null}
+                  <div key={i} className="tw-hyp">
+                    <div className="tw-hyp-tags">
+                      <span className="tw-chip tw-chip-plain">{h.confidence} confidence</span>
+                      {h.evidence_status === "unsupported"
+                        ? <span className="tw-chip tw-sev tw-sev-high" title="Every citation referenced events that do not exist in this incident.">no surviving evidence</span>
+                        : h.evidence_status === "contested" ? <span className="tw-chip tw-sev tw-sev-medium">evidence contested</span>
+                        : h.evidence_status === "supported" ? <span className="tw-chip tw-status tw-status-observed">evidence-linked</span>
+                        : null}
                     </div>
-                    <div style={{ fontSize: 13, lineHeight: 1.6 }}>{h.statement}</div>
-                    {h.reasoning ? (
-                      <div className="dim" style={{ fontSize: 12, marginTop: 4 }}>{h.reasoning}</div>
-                    ) : null}
-                    <div className="mono" style={{ fontSize: 10.5, marginTop: 5 }}>
-                      <span style={{ color: "var(--green)" }}>
-                        supports: {h.supporting_event_ids.map((x) => `#${x}`).join(", ") || "none"}
-                      </span>
-                      {"  "}
-                      <span style={{ color: "var(--high)" }}>
-                        contradicts: {h.contradicting_event_ids.map((x) => `#${x}`).join(", ") || "none"}
-                      </span>
+                    <div className="tw-hyp-statement">{h.statement}</div>
+                    {h.reasoning ? <div className="tw-hyp-reasoning">{h.reasoning}</div> : null}
+                    <div className="tw-cites">
+                      <span className="sup">supports: {h.supporting_event_ids.map((x) => `#${x}`).join(", ") || "none"}</span>
+                      <span className="con">contradicts: {h.contradicting_event_ids.map((x) => `#${x}`).join(", ") || "none"}</span>
                     </div>
                   </div>
                 ))}
@@ -747,24 +646,22 @@ function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => P
           ) : null}
 
           {result.missing_information.length > 0 || result.next_investigation_steps.length > 0 ? (
-            <div className="grid grid-2">
+            <div className="tw-grid tw-grid-2">
               {result.missing_information.length > 0 ? (
-                <div className="panel">
-                  <div className="panel-head"><span className="panel-title">Still unknown</span></div>
-                  <div className="panel-body" style={{ fontSize: 12.5 }}>
-                    <ul style={{ margin: 0, paddingLeft: 17, lineHeight: 1.75 }}>
+                <div className="tw-panel">
+                  <PanelHeader title="Still unknown" />
+                  <div className="tw-panel-body">
+                    <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
                       {result.missing_information.map((m, i) => <li key={i}>{m}</li>)}
                     </ul>
                   </div>
                 </div>
               ) : null}
               {result.next_investigation_steps.length > 0 ? (
-                <div className="panel">
-                  <div className="panel-head">
-                    <span className="panel-title">Next steps (advisory)</span>
-                  </div>
-                  <div className="panel-body" style={{ fontSize: 12.5 }}>
-                    <ul style={{ margin: 0, paddingLeft: 17, lineHeight: 1.75 }}>
+                <div className="tw-panel">
+                  <PanelHeader title="Next steps" sub="advisory" />
+                  <div className="tw-panel-body">
+                    <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
                       {result.next_investigation_steps.map((s, i) => <li key={i}>{s}</li>)}
                     </ul>
                   </div>
@@ -774,11 +671,9 @@ function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => P
           ) : null}
 
           {result.uncertainty_notes ? (
-            <div className="banner banner-warn">
-              <span><strong>Uncertainty:</strong> {result.uncertainty_notes}</span>
-            </div>
+            <div className="tw-banner tw-banner-warn"><span><strong>Uncertainty:</strong> {result.uncertainty_notes}</span></div>
           ) : null}
-        </div>
+        </>
       ) : latest && latest.status !== "ok" && latest.status !== "ok_with_warnings" ? (
         <RunHistory runs={detail.ai_runs} />
       ) : null}
@@ -789,47 +684,25 @@ function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => P
 }
 
 function RunHistory({ runs }: { runs: AiRun[] }) {
+  const cols: Column<AiRun>[] = [
+    { key: "id", header: "Run", width: 64, render: (r) => <span className="mono">#{r.id}</span> },
+    { key: "pm", header: "Provider / model", width: 200, render: (r) => (
+      <span className="mono">{r.provider || "—"}{r.model ? ` / ${r.model}` : ""}</span>) },
+    { key: "status", header: "Status", width: 150, render: (r) => (
+      <span className="mono" style={{ color: r.status.startsWith("ok") ? "var(--tw-success)" : "var(--tw-high)" }}>{r.status}</span>) },
+    { key: "lat", header: "Latency", width: 90, render: (r) => <span className="mono num">{r.latency_ms ? `${r.latency_ms}ms` : "—"}</span> },
+    { key: "note", header: "Note", render: (r) => (
+      <span className="truncate" style={{ display: "block", maxWidth: 320 }}>{r.error_message || r.error_category || "—"}</span>) },
+  ];
   return (
-    <div className="panel">
-      <div className="panel-head">
-        <span className="panel-title">Run history</span>
-        <span className="spacer" />
-        <span className="mono faint" style={{ fontSize: 10.5 }}>most recent first</span>
-      </div>
-      <table className="table">
-        <thead>
-          <tr>
-            <th style={{ width: 60 }}>ID</th>
-            <th style={{ width: 150 }}>Provider / model</th>
-            <th style={{ width: 130 }}>Status</th>
-            <th style={{ width: 80 }}>Latency</th>
-            <th>Note</th>
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((r) => (
-            <tr key={r.id}>
-              <td className="mono dim">#{r.id}</td>
-              <td className="mono" style={{ fontSize: 11 }}>
-                {r.provider || "—"}{r.model ? ` / ${r.model}` : ""}
-              </td>
-              <td className="mono" style={{
-                fontSize: 11,
-                color: r.status.startsWith("ok") ? "var(--green)" : "var(--high)",
-              }}>
-                {r.status}
-              </td>
-              <td className="mono dim">{r.latency_ms ? `${r.latency_ms}ms` : "—"}</td>
-              <td className="dim truncate" style={{ maxWidth: 320, fontSize: 11 }}>
-                {r.error_message || r.error_category || "—"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="tw-panel">
+      <PanelHeader title="Run history" sub="most recent first" />
+      <DataTable columns={cols} rows={runs} rowKey={(r) => r.id} />
     </div>
   );
 }
+
+/* ------------------------------------------------------------- report --- */
 
 function ReportTab({ incidentId }: { incidentId: number }) {
   const [fmt, setFmt] = useState<"md" | "html" | "json">("md");
@@ -837,72 +710,55 @@ function ReportTab({ incidentId }: { incidentId: number }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generate = async (f: typeof fmt) => {
+  const generate = useCallback(async (f: typeof fmt) => {
     setBusy(true); setError(null);
     try {
       const r = await api.report(incidentId, f);
       setContent(r.content);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Report generation failed");
-    } finally {
-      setBusy(false);
-    }
-  };
+    } finally { setBusy(false); }
+  }, [incidentId]);
 
-  useEffect(() => { void generate(fmt); }, [incidentId, fmt]);
+  useEffect(() => { void generate(fmt); }, [generate, fmt]);
 
   return (
-    <div className="col" style={{ gap: 12 }}>
+    <div className="col" style={{ gap: 16 }}>
       <div className="row" style={{ flexWrap: "wrap" }}>
-        <select className="select" style={{ width: 160 }} value={fmt}
-                onChange={(e) => setFmt(e.target.value as typeof fmt)}>
+        <select className="tw-select" style={{ width: 170 }} value={fmt}
+                onChange={(e) => setFmt(e.target.value as typeof fmt)} aria-label="Report format">
           <option value="md">Markdown</option>
           <option value="html">HTML (printable)</option>
           <option value="json">JSON</option>
         </select>
-        <button className="btn btn-sm" onClick={() => void generate(fmt)} disabled={busy}>
+        <button className="tw-btn tw-btn-sm" onClick={() => void generate(fmt)} disabled={busy}>
           {busy ? "Generating…" : "Regenerate"}
         </button>
-        <a className="btn btn-sm btn-primary"
-           href={api.reportUrl(incidentId, fmt)} download>
-          Download
-        </a>
+        <button className="tw-btn tw-btn-sm tw-btn-primary"
+                onClick={() => void downloadReport(api.reportUrl(incidentId, fmt), `incident-${incidentId}-report.${fmt}`)}>
+          {Icons.download({ style: { width: 14, height: 14 } })} Download
+        </button>
         {fmt === "html" ? (
-          <button className="btn btn-sm" onClick={() => {
+          <button className="tw-btn tw-btn-sm" onClick={() => {
             const w = window.open("", "_blank");
             if (w && content) { w.document.write(content); w.document.close(); }
-          }}>
-            Open printable view
-          </button>
+          }}>Open printable view</button>
         ) : null}
       </div>
-      {error ? <ErrorBanner message={error} onRetry={() => void generate(fmt)} /> : null}
-      {busy && !content ? <Loading label="Generating report…" /> : null}
+
+      {error ? <ErrorState message={error} onRetry={() => void generate(fmt)} /> : null}
+      {busy && !content ? <LoadingState label="Generating report…" /> : null}
+
       {content ? (
-        <div className="panel">
-          <div className="panel-head">
-            <span className="panel-title">{fmt.toUpperCase()} report</span>
-            <span className="spacer" />
-            <span className="mono faint" style={{ fontSize: 10.5 }}>
-              generated from stored data only · {content.length.toLocaleString()} chars
-            </span>
-          </div>
-          <div className="panel-body" style={{ padding: 0 }}>
-            {fmt === "md" ? (
-              <pre className="mono" style={{
-                margin: 0, padding: 16, fontSize: 11.5, whiteSpace: "pre-wrap",
-                color: "var(--fg-dim)", maxHeight: 640, overflow: "auto", lineHeight: 1.65,
-              }}>
-                {content}
-              </pre>
-            ) : fmt === "html" ? (
+        <div className="tw-panel">
+          <PanelHeader title={`${fmt.toUpperCase()} report`}
+                       sub={`generated from stored data only · ${content.length.toLocaleString()} chars`} />
+          <div className="tw-panel-body tight">
+            {fmt === "html" ? (
               <iframe title="Report preview" srcDoc={content}
-                      style={{ width: "100%", height: 640, border: "none", background: "#070d18" }} />
+                      style={{ width: "100%", height: 640, border: "none", background: "#fff" }} />
             ) : (
-              <pre className="mono" style={{
-                margin: 0, padding: 16, fontSize: 11, whiteSpace: "pre-wrap",
-                color: "var(--fg-dim)", maxHeight: 640, overflow: "auto",
-              }}>
+              <pre className="tw-raw" style={{ borderRadius: 0, border: 0, maxHeight: 640, background: "var(--tw-surface-sunken)", color: "var(--tw-text-secondary)" }}>
                 {content}
               </pre>
             )}

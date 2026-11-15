@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type IncidentSummary } from "../api";
-import { Empty, ErrorBanner, Loading, SeverityChip, fmtTime } from "../components/ui";
+import { PageHeader } from "../components/layout";
+import { DataTable, FilterBar, type Column } from "../components/data";
+import { EmptyState, ErrorState, LoadingState, SeverityIndicator, StatusIndicator, fmtTime } from "../components/ui";
 
 export function IncidentsList({ onOpen }: { onOpen: (id: number) => void }) {
   const [items, setItems] = useState<IncidentSummary[]>([]);
@@ -9,7 +11,7 @@ export function IncidentsList({ onOpen }: { onOpen: (id: number) => void }) {
   const [sev, setSev] = useState("");
   const [status, setStatus] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const r = await api.incidents();
@@ -17,76 +19,66 @@ export function IncidentsList({ onOpen }: { onOpen: (id: number) => void }) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load incidents");
     } finally { setLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const rows = items.filter(
     (i) => (!sev || i.severity === sev) && (!status || i.status === status),
   );
 
-  if (loading) return <Loading />;
-  if (error) return <ErrorBanner message={error} onRetry={load} />;
+  const cols: Column<IncidentSummary>[] = [
+    { key: "ref", header: "Incident", width: 92, render: (i) => (
+      <span className="mono" style={{ color: "var(--tw-primary)" }}>{i.ref}</span>) },
+    { key: "title", header: "Title", className: "primary", render: (i) => (
+      <span className="truncate" style={{ display: "block", maxWidth: 420 }} title={i.title}>{i.title}</span>) },
+    { key: "sev", header: "Severity", width: 96, render: (i) => <SeverityIndicator severity={i.severity} /> },
+    { key: "status", header: "Status", width: 122, render: (i) => <StatusIndicator status={i.status} /> },
+    { key: "alerts", header: "Alerts", width: 74, align: "right", render: (i) => (
+      <span className="mono num">{i.alert_count}</span>) },
+    { key: "hosts", header: "Affected assets", width: 220, render: (i) => (
+      <span className="mono truncate" style={{ display: "block", maxWidth: 220 }}
+            title={i.hosts.join(", ")}>{i.hosts.join(", ") || "—"}</span>) },
+    { key: "first", header: "First seen", width: 158, render: (i) => (
+      <span className="mono num">{fmtTime(i.first_ts)}</span>) },
+  ];
 
   return (
-    <div className="col" style={{ gap: 12 }}>
-      <div className="row" style={{ flexWrap: "wrap" }}>
-        <select className="select" style={{ width: 170 }} value={sev}
-                onChange={(e) => setSev(e.target.value)}>
-          <option value="">All severities</option>
-          {["critical", "high", "medium", "low", "info"].map((s) =>
-            <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select className="select" style={{ width: 170 }} value={status}
-                onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          {["open", "investigating", "contained", "closed"].map((s) =>
-            <option key={s} value={s}>{s}</option>)}
-        </select>
-        <span className="faint mono" style={{ fontSize: 11 }}>
-          {rows.length} of {items.length} incidents
-        </span>
-        <span className="spacer" />
-        <button className="btn btn-sm" onClick={load}>Refresh</button>
-      </div>
+    <>
+      <PageHeader
+        title="Incidents"
+        subtitle="Correlated groups of detections that share a host or account."
+        actions={<button className="tw-btn tw-btn-sm" onClick={() => void load()}>Refresh</button>}
+      />
 
-      {rows.length === 0 ? (
-        <div className="panel">
-          <Empty title="No incidents" detail="Load the demo dataset or import events, then run analysis." />
-        </div>
-      ) : (
-        <div className="panel">
-          <table className="table">
-            <thead>
-              <tr>
-                <th style={{ width: 74 }}>Ref</th>
-                <th>Title</th>
-                <th style={{ width: 92 }}>Severity</th>
-                <th style={{ width: 100 }}>Status</th>
-                <th style={{ width: 70 }}>Alerts</th>
-                <th style={{ width: 210 }}>Hosts</th>
-                <th style={{ width: 165 }}>First seen (UTC)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((i) => (
-                <tr key={i.id} className="clickable" onClick={() => onOpen(i.id)}>
-                  <td className="mono" style={{ color: "var(--cyan)" }}>{i.ref}</td>
-                  <td className="truncate" style={{ maxWidth: 380 }} title={i.title}>{i.title}</td>
-                  <td><SeverityChip severity={i.severity} /></td>
-                  <td className="mono faint" style={{ fontSize: 11 }}>{i.status}</td>
-                  <td className="mono dim">{i.alert_count}</td>
-                  <td className="mono dim truncate" style={{ maxWidth: 210, fontSize: 11 }}
-                      title={i.hosts.join(", ")}>
-                    {i.hosts.join(", ") || "—"}
-                  </td>
-                  <td className="mono dim">{fmtTime(i.first_ts)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+      <FilterBar>
+        <select className="tw-select" style={{ width: 168 }} value={sev}
+                onChange={(e) => setSev(e.target.value)} aria-label="Filter by severity">
+          <option value="">All severities</option>
+          {["critical", "high", "medium", "low", "info"].map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select className="tw-select" style={{ width: 168 }} value={status}
+                onChange={(e) => setStatus(e.target.value)} aria-label="Filter by status">
+          <option value="">All statuses</option>
+          {["open", "investigating", "contained", "closed"].map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <span className="faint mono">{rows.length} of {items.length}</span>
+      </FilterBar>
+
+      <div className="tw-panel" style={{ marginTop: 16 }}>
+        {loading ? <LoadingState label="Loading incidents…" />
+          : error ? <div style={{ padding: 16 }}><ErrorState message={error} onRetry={load} /></div>
+          : (
+            <DataTable
+              columns={cols}
+              rows={rows}
+              rowKey={(i) => i.id}
+              onRowClick={(i) => onOpen(i.id)}
+              empty={<EmptyState title="No incidents"
+                                 detail="Load the demo dataset or import events, then run analysis." />}
+            />
+          )}
+      </div>
+    </>
   );
 }

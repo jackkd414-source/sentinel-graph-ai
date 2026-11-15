@@ -1,188 +1,213 @@
-// Shared presentational primitives. Small on purpose - no icon library.
+// TRACEWORK shared UI primitives: indicators, states, overlays, helpers.
+// Every visual decision here is token-driven; pages never re-invent styling.
 
-import type { ReactNode } from "react";
-import type { Severity, TsStatus } from "../api";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Icons } from "./icons";
 
-const S = { fill: "none", stroke: "currentColor", strokeWidth: 1.7,
-  strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-
-export const Icon = {
-  dashboard: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  ),
-  incident: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M12 3 2.5 20h19L12 3z" />
-      <path d="M12 9.5v4.5M12 17.2v.1" />
-    </svg>
-  ),
-  graph: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <circle cx="6" cy="6" r="2.6" />
-      <circle cx="18" cy="8" r="2.6" />
-      <circle cx="11" cy="18" r="2.6" />
-      <path d="M8.3 7.2 15.5 7.6M7.4 8.4l2.6 7.2M16.6 10.2l-3.9 5.8" />
-    </svg>
-  ),
-  timeline: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M3 12h18" />
-      <circle cx="7" cy="12" r="2" />
-      <circle cx="14" cy="12" r="2" />
-      <path d="M7 12V6M14 12v6" />
-    </svg>
-  ),
-  evidence: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M5 3h9l5 5v13H5V3z" />
-      <path d="M14 3v5h5" />
-    </svg>
-  ),
-  report: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M5 4h14v16H5z" />
-      <path d="M8.5 9h7M8.5 12.5h7M8.5 16h4" />
-    </svg>
-  ),
-  rules: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M4 7h10M4 12h16M4 17h7" />
-      <circle cx="18" cy="7" r="2" />
-      <circle cx="14" cy="17" r="2" />
-    </svg>
-  ),
-  settings: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
-    </svg>
-  ),
-  upload: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M12 16V4M7 9l5-5 5 5" />
-      <path d="M4 16v4h16v-4" />
-    </svg>
-  ),
-  search: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <circle cx="11" cy="11" r="6.5" />
-      <path d="M16 16l4.5 4.5" />
-    </svg>
-  ),
-  refresh: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M20 12a8 8 0 1 1-2.6-5.9" />
-      <path d="M20 4v4.5h-4.5" />
-    </svg>
-  ),
-  download: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M12 4v12M7 11l5 5 5-5" />
-      <path d="M4 20h16" />
-    </svg>
-  ),
-  spark: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6.3 6.3l2.8 2.8M14.9 14.9l2.8 2.8M17.7 6.3l-2.8 2.8M9.1 14.9l-2.8 2.8" />
-    </svg>
-  ),
-  shield: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2.5 4.5 5.5v6c0 5 3.2 8.6 7.5 10 4.3-1.4 7.5-5 7.5-10v-6L12 2.5z" />
-      <path d="M12 8.5v4M12 15.4v.1" />
-    </svg>
-  ),
-  close: () => (
-    <svg viewBox="0 0 24 24" className="icon" {...S}>
-      <path d="M6 6l12 12M18 6L6 18" />
-    </svg>
-  ),
-};
-
-export function SeverityChip({ severity }: { severity: Severity | null | undefined }) {
-  const s = (severity || "info") as Severity;
-  return <span className={`chip chip-${s}`}>{s}</span>;
-}
-
-export function StatusChip({ status }: { status: "observed" | "inferred" }) {
-  return <span className={`chip chip-${status}`}>{status}</span>;
-}
-
-export function TsBadge({ status, raw }: { status: TsStatus; raw?: string | null }) {
-  if (status === "ok") {
-    return <span className="mono" style={{ color: "var(--fg-dim)" }}>{raw || "—"}</span>;
-  }
-  const label = status === "assumed" ? "TIME ASSUMED" : status === "invalid" ? "TIME INVALID" : "NO TIME";
-  const color = status === "assumed" ? "var(--medium)" : "var(--critical)";
-  return (
-    <span className="mono" style={{ color, fontSize: 11 }} title={
-      status === "assumed"
-        ? "Parsed without an explicit timezone; interpreted using the configured default."
-        : status === "invalid"
-          ? `Could not parse the source timestamp: ${raw || "(empty)"}`
-          : "No timestamp present in the source record."
-    }>
-      [{label}]
-    </span>
-  );
-}
-
-export function Loading({ label = "Loading…" }: { label?: string }) {
-  return (
-    <div className="loading-row">
-      <span className="spinner" />
-      <span>{label}</span>
-    </div>
-  );
-}
-
-export function Empty({ title, detail, icon }: {
-  title: string; detail?: string; icon?: ReactNode;
-}) {
-  return (
-    <div className="empty">
-      <svg viewBox="0 0 24 24" className="empty-icon" fill="none"
-           stroke="currentColor" strokeWidth={1.2}>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M8 15h8M9 9.5h.1M15 9.5h.1" strokeLinecap="round" />
-      </svg>
-      <strong>{title}</strong>
-      {detail ? <div style={{ maxWidth: 460, margin: "0 auto", lineHeight: 1.6 }}>{detail}</div> : null}
-      {icon}
-    </div>
-  );
-}
-
-export function ErrorBanner({ message, onRetry }: { message: string; onRetry?: () => void }) {
-  return (
-    <div className="banner banner-err">
-      <span style={{ flex: 1 }}>{message}</span>
-      {onRetry ? (
-        <button className="btn btn-sm" onClick={onRetry}>Retry</button>
-      ) : null}
-    </div>
-  );
-}
+/* ------------------------------------------------------------- helpers -- */
 
 export function fmtTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
-         `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}Z`;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ` +
+    `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`
+  );
 }
 
 export function fmtBytes(n: number | null | undefined): string {
-  if (n === null || n === undefined) return "—";
+  if (n == null) return "—";
   if (n < 1024) return `${n} B`;
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KiB`;
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MiB`;
-  return `${(n / 1024 ** 3).toFixed(2)} GiB`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
+
+const SEVERITIES = ["critical", "high", "medium", "low", "info"] as const;
+
+export function sevRank(s: string | null | undefined): number {
+  const i = SEVERITIES.indexOf((s || "") as (typeof SEVERITIES)[number]);
+  return i === -1 ? 99 : i;
+}
+
+/* ---------------------------------------------------------- indicators -- */
+
+/** Severity as colour + explicit text label (never colour alone). */
+export function SeverityIndicator({ severity }: { severity: string | null | undefined }) {
+  const s = (severity || "info").toLowerCase();
+  return <span className={`tw-chip tw-sev tw-sev-${s}`}>{s}</span>;
+}
+
+export function StatusIndicator({ status }: { status: string }) {
+  const s = (status || "").toLowerCase().replace(/\s+/g, "-");
+  return <span className={`tw-chip tw-status tw-status-${s}`}>{status}</span>;
+}
+
+export function EntityTypeIndicator({ type }: { type: string }) {
+  return <span className={`tw-chip tw-entity tw-entity-${type}`}>{type}</span>;
+}
+
+/** A citation to a stored event. Clicking jumps to the evidence surface. */
+export function EvidenceReference({
+  id, onOpen, label,
+}: { id: number; onOpen?: (id: number) => void; label?: string }) {
+  return (
+    <button
+      type="button"
+      className="tw-evref"
+      title={`Evidence event #${id}`}
+      onClick={onOpen ? () => onOpen(id) : undefined}
+      disabled={!onOpen}
+    >
+      {Icons.evidence({ style: { width: 11, height: 11 } })}
+      {label ?? `#${id}`}
+    </button>
+  );
+}
+
+export function SourceLabel({ children }: { children: ReactNode }) {
+  return <span className="tw-source">{children}</span>;
+}
+
+/** Timestamp with a flag when the source timestamp could not be normalised. */
+export function Timestamp({ status, raw }: { status?: string; raw?: string | null }) {
+  const bad = status && status !== "ok";
+  return (
+    <span className="mono num nowrap" style={{ color: bad ? "var(--tw-warning)" : undefined }}
+          title={raw ? `raw: ${raw}` : undefined}>
+      {fmtTime(raw)}
+      {bad ? " ⚠" : ""}
+    </span>
+  );
+}
+
+/* -------------------------------------------------------------- states -- */
+
+export function EmptyState({
+  title, detail, icon,
+}: { title: string; detail?: string; icon?: ReactNode }) {
+  return (
+    <div className="tw-empty">
+      {icon ?? Icons.layers({ style: { width: 30, height: 30 } })}
+      <strong>{title}</strong>
+      {detail ? <p>{detail}</p> : null}
+    </div>
+  );
+}
+
+export function LoadingState({ label = "Loading…" }: { label?: string }) {
+  return (
+    <div className="tw-loading">
+      <span className="tw-spinner" />
+      {label}
+    </div>
+  );
+}
+
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  return (
+    <div className="tw-banner tw-banner-err" role="alert">
+      <span style={{ flex: 1 }}>{message}</span>
+      {onRetry ? (
+        <button className="tw-btn tw-btn-sm" onClick={onRetry}>Retry</button>
+      ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ overlays -- */
+
+export function Tooltip({ label, children }: { label: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="tw-tip"
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}>
+      {children}
+      {open ? <span role="tooltip" className="tw-tip-bubble">{label}</span> : null}
+    </span>
+  );
+}
+
+export function Notification({
+  kind, message, onClose,
+}: { kind: "ok" | "err" | "info"; message: string; onClose: () => void }) {
+  useEffect(() => {
+    const t = window.setTimeout(onClose, kind === "err" ? 9000 : 6000);
+    return () => window.clearTimeout(t);
+  }, [kind, message, onClose]);
+  return (
+    <div className={`tw-toast ${kind === "info" ? "" : kind}`} role="status">
+      <span style={{ flex: 1 }}>{message}</span>
+      <button className="tw-btn tw-btn-sm tw-btn-ghost tw-btn-icon" aria-label="Dismiss" onClick={onClose}>
+        {Icons.close({ style: { width: 13, height: 13 } })}
+      </button>
+    </div>
+  );
+}
+
+export function ConfirmDialog({
+  open, title, body, confirmLabel = "Confirm", danger, onConfirm, onCancel,
+}: {
+  open: boolean; title: string; body: string; confirmLabel?: string;
+  danger?: boolean; onConfirm: () => void; onCancel: () => void;
+}) {
+  const okRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    okRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onCancel]);
+  if (!open) return null;
+  return (
+    <div className="tw-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div className="tw-dialog" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="tw-dialog-head">{title}</div>
+        <div className="tw-dialog-body">{body}</div>
+        <div className="tw-dialog-foot">
+          <button className="tw-btn" onClick={onCancel}>Cancel</button>
+          <button ref={okRef} className={`tw-btn ${danger ? "tw-btn-danger" : "tw-btn-primary"}`}
+                  onClick={onConfirm}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------- forms -- */
+
+export function FormField({
+  label, hint, hintWarn, children,
+}: { label: string; hint?: ReactNode; hintWarn?: boolean; children: ReactNode }) {
+  return (
+    <div className="tw-field">
+      <label className="tw-label">{label}</label>
+      {children}
+      {hint ? <div className={`tw-hint${hintWarn ? " warn" : ""}`}>{hint}</div> : null}
+    </div>
+  );
+}
+
+export function SearchInput({
+  value, onChange, placeholder = "Search…", width = 240, onEnter,
+}: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+  width?: number; onEnter?: () => void;
+}) {
+  return (
+    <div className="tw-search" style={{ width }}>
+      {Icons.search({ style: { width: 15, height: 15 } })}
+      <input className="tw-input" value={value} placeholder={placeholder}
+             onChange={(e) => onChange(e.target.value)}
+             onKeyDown={(e) => { if (e.key === "Enter" && onEnter) onEnter(); }} />
+    </div>
+  );
+}
+
+/** Re-exported severity list so pages share one ordering. */
+export { SEVERITIES };

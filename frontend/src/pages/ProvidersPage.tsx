@@ -1,6 +1,17 @@
-import { useEffect, useState } from "react";
-import { api, type ProviderConfig, type ProviderTypeMeta, type TestResult } from "../api";
-import { ErrorBanner, Loading } from "../components/ui";
+import { useCallback, useEffect, useState } from "react";
+import { api, authFetch, type CredentialStorage, type ProviderConfig, type ProviderTypeMeta, type TestResult } from "../api";
+import { PageHeader } from "../components/layout";
+import { ProviderCard } from "../components/ProviderCard";
+import { ConfirmDialog, EmptyState, ErrorState, FormField, LoadingState } from "../components/ui";
+
+const PRESETS: Record<string, string> = {
+  openai: "gpt-4o-mini",
+  anthropic: "claude-3-5-haiku-latest",
+  gemini: "gemini-2.0-flash",
+  openrouter: "",
+  ollama: "llama3.1",
+  custom_openai: "",
+};
 
 export function ProvidersPage() {
   const [configs, setConfigs] = useState<ProviderConfig[]>([]);
@@ -11,21 +22,25 @@ export function ProvidersPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [testing, setTesting] = useState<number | null>(null);
   const [results, setResults] = useState<Record<number, TestResult>>({});
-  const [showForm, setShowForm] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<ProviderConfig | null>(null);
+  const [confirmDel, setConfirmDel] = useState<ProviderConfig | null>(null);
+  const [storage, setStorage] = useState<CredentialStorage | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const r = await api.providers();
       setConfigs(r.configs);
       setTypes(r.types);
       setEncOk(r.encryption_available);
+      setStorage(r.credential_storage ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load providers");
     } finally { setLoading(false); }
-  };
+  }, []);
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [load]);
 
   const test = async (id: number) => {
     setTesting(id);
@@ -39,208 +54,137 @@ export function ProvidersPage() {
   };
 
   const activate = async (id: number, active: boolean) => {
-    try {
-      await api.activateProvider(id, active);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Activation failed");
-    }
+    try { await api.activateProvider(id, active); await load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Activation failed"); }
   };
 
   const remove = async (id: number) => {
-    if (!window.confirm("Delete this provider configuration? The stored credential is deleted too.")) return;
-    try {
-      await api.deleteProvider(id);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
-    }
+    try { await api.deleteProvider(id); await load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Delete failed"); }
   };
 
-  if (loading) return <Loading />;
+  if (loading) return <LoadingState label="Loading providers…" />;
 
   return (
-    <div className="col" style={{ gap: 14 }}>
-      {error ? <ErrorBanner message={error} onRetry={load} /> : null}
-      {notice ? <div className="banner banner-ok">{notice}</div> : null}
+    <>
+      <PageHeader
+        title="AI Providers"
+        subtitle="Provider configuration is stored server-side. Keys are encrypted at rest and never returned to the browser."
+        actions={
+          <button className="tw-btn tw-btn-sm tw-btn-primary"
+                  onClick={() => { setEditing(null); setFormOpen(!formOpen); }}>
+            {formOpen && !editing ? "Cancel" : "+ Add provider"}
+          </button>
+        }
+      />
+
+      {error ? <div style={{ marginBottom: 16 }}><ErrorState message={error} onRetry={load} /></div> : null}
+      {notice ? <div className="tw-banner tw-banner-ok" style={{ marginBottom: 16 }}><span>{notice}</span></div> : null}
 
       {!encOk ? (
-        <div className="banner banner-warn">
+        <div className="tw-banner tw-banner-warn" style={{ marginBottom: 16 }}>
           <span>
-            <strong>Secure credential storage is not configured (SG_MASTER_KEY unset).</strong>{" "}
-            API keys cannot be saved to the database. Either generate a master key
-            (<span className="mono">python -m sentinelgraph keys</span>) and add it to{" "}
-            <span className="mono">.env</span>, or provide credentials via environment
+            <strong>Secure credential storage is unavailable.</strong> The master key could not
+            be read or created, so API keys cannot be saved to the database. Set{" "}
+            <span className="mono">SG_MASTER_KEY</span> (generate one with{" "}
+            <span className="mono">python -m sentinelgraph keys</span>) or make the data
+            directory writable, then restart. Alternatively provide credentials via environment
             variables. SentinelGraph will never store a key in plaintext.
           </span>
         </div>
-      ) : null}
+      ) : (
+        <div className="tw-banner tw-banner-ok" style={{ marginBottom: 16 }}>
+          <span>
+            <strong>Credentials are encrypted at rest.</strong>{" "}
+            {storage?.source === "env"
+              ? <>Master key supplied by <span className="mono">SG_MASTER_KEY</span>.</>
+              : storage?.source === "generated"
+                ? <>A master key was generated on first use and stored at{" "}
+                    <span className="mono">{storage?.path}</span>. Back it up: losing it makes
+                    saved keys unrecoverable.</>
+                : <>Master key loaded from <span className="mono">{storage?.path}</span>.</>}{" "}
+            Keys are never returned to the browser.
+          </span>
+        </div>
+      )}
 
-      <div className="row">
-        <span className="dim" style={{ fontSize: 12.5, flex: 1 }}>
-          Provider configuration is stored server-side. Keys are encrypted at rest and never
-          returned to the browser — only a masked hint is shown.
-        </span>
-        <button className="btn btn-primary btn-sm" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "+ Add provider"}
-        </button>
-      </div>
-
-      {showForm ? (
+      {formOpen ? (
         <ProviderForm
-          types={types}
-          encOk={encOk}
-          onDone={(msg) => {
-            setShowForm(false);
-            setNotice(msg);
-            void load();
-          }}
+          types={types} encOk={encOk} initial={editing}
+          onCancel={() => { setFormOpen(false); setEditing(null); }}
+          onDone={(msg) => { setFormOpen(false); setEditing(null); setNotice(msg); void load(); }}
           onError={setError}
         />
       ) : null}
 
       {configs.length === 0 ? (
-        <div className="panel" style={{ padding: 28, textAlign: "center" }}>
-          <div style={{ fontSize: 13.5, color: "var(--fg-dim)", marginBottom: 6 }}>
-            No AI provider configured
-          </div>
-          <div className="dim" style={{ fontSize: 12.5, maxWidth: 520, margin: "0 auto" }}>
-            SentinelGraph runs fully without AI: detection, correlation, attack graph,
-            timeline and reports are all available. Configure a provider to add
-            model-assisted interpretation.
-          </div>
+        <div className="tw-panel">
+          <EmptyState title="No AI provider configured"
+            detail="SentinelGraph runs fully without AI: detection, correlation, attack graph, timeline and reports are all available. Configure a provider to add model-assisted interpretation." />
         </div>
       ) : (
-        <div className="col" style={{ gap: 11 }}>
-          {configs.map((c) => {
-            const r = results[c.id];
-            return (
-              <div key={c.id} className="panel">
-                <div className="panel-head">
-                  <span className="panel-title">{c.name}</span>
-                  <span className="chip chip-info">{c.provider_type}</span>
-                  {c.is_active ? <span className="chip chip-observed">active</span> : null}
-                  <span className="spacer" />
-                  {!c.is_active ? (
-                    <button className="btn btn-sm" onClick={() => void activate(c.id, true)}>
-                      Set active
-                    </button>
-                  ) : (
-                    <button className="btn btn-sm" onClick={() => void activate(c.id, false)}>
-                      Deactivate
-                    </button>
-                  )}
-                  <button className="btn btn-sm btn-primary" disabled={testing === c.id}
-                          onClick={() => void test(c.id)}>
-                    {testing === c.id ? "Testing…" : "Test connection"}
-                  </button>
-                  <button className="btn btn-sm btn-danger" onClick={() => void remove(c.id)}>
-                    Delete
-                  </button>
-                </div>
-                <div className="panel-body" style={{ fontSize: 12.5 }}>
-                  <div className="grid grid-3" style={{ gap: 10 }}>
-                    <Field label="Model" value={c.model_id} mono />
-                    <Field label="Base URL" value={c.base_url || "(provider default)"} mono />
-                    <Field label="Credential" value={
-                      c.credential_configured
-                        ? `${c.credential_hint} (${c.secret_source})`
-                        : "not configured"
-                    } mono />
-                    <Field label="Timeout" value={`${c.timeout_s}s`} />
-                    <Field label="Max output" value={c.max_output_tokens ? `${c.max_output_tokens} tokens` : "provider default"} />
-                    <Field label="Last test" value={
-                      c.last_test_status
-                        ? `${c.last_test_status}${c.last_test_latency_ms ? ` · ${c.last_test_latency_ms}ms` : ""}`
-                        : "never tested"
-                    } />
-                  </div>
-                  {c.last_test_error ? (
-                    <div className="mono" style={{ fontSize: 10.5, color: "var(--high)",
-                                                   marginTop: 8 }}>
-                      last error: {c.last_test_error}
-                    </div>
-                  ) : null}
-                  {r ? (
-                    <div className={`banner ${r.ok ? "banner-ok" : "banner-err"}`}
-                         style={{ marginTop: 10, marginBottom: 0 }}>
-                      <span>
-                        <strong>{r.ok ? "Connection OK" : "Connection failed"}</strong>
-                        {" — "}{r.provider}/{r.model} · {r.latency_ms}ms
-                        {r.error_category ? ` · ${r.error_category}` : ""}
-                        {r.error_message ? `: ${r.error_message}` : ""}
-                        {r.ok && r.sample_reply ? ` · reply: "${r.sample_reply}"` : ""}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })}
+        <div className="col" style={{ gap: 16 }}>
+          {configs.map((c) => (
+            <ProviderCard
+              key={c.id}
+              config={c}
+              result={results[c.id]}
+              testing={testing === c.id}
+              onTest={() => void test(c.id)}
+              onActivate={() => void activate(c.id, !c.is_active)}
+              onDelete={() => setConfirmDel(c)}
+              onEdit={() => { setEditing(c); setFormOpen(true); }}
+            />
+          ))}
         </div>
       )}
-    </div>
+
+      <ConfirmDialog
+        open={!!confirmDel}
+        title={`Delete “${confirmDel?.name}”?`}
+        body="This removes the provider configuration and the stored credential. It cannot be undone."
+        confirmLabel="Delete provider"
+        danger
+        onCancel={() => setConfirmDel(null)}
+        onConfirm={() => { const c = confirmDel; setConfirmDel(null); if (c) void remove(c.id); }}
+      />
+    </>
   );
 }
 
-function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div>
-      <div className="mono" style={{ fontSize: 10, letterSpacing: 0.7, color: "var(--fg-muted)",
-                                     textTransform: "uppercase", marginBottom: 2 }}>
-        {label}
-      </div>
-      <div className={mono ? "mono" : ""} style={{ fontSize: 11.5, color: "var(--fg-dim)",
-                                                   wordBreak: "break-all" }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-const PRESETS: Record<string, { model: string; fast: string }> = {
-  openai: { model: "gpt-4o-mini", fast: "" },
-  anthropic: { model: "claude-3-5-haiku-latest", fast: "" },
-  gemini: { model: "gemini-2.0-flash", fast: "" },
-  openrouter: { model: "", fast: "" },
-  ollama: { model: "llama3.1", fast: "" },
-  custom_openai: { model: "", fast: "" },
-};
-
-function ProviderForm({ types, encOk, onDone, onError }: {
+function ProviderForm({
+  types, encOk, initial, onDone, onError, onCancel,
+}: {
   types: Record<string, ProviderTypeMeta>;
   encOk: boolean;
+  initial: ProviderConfig | null;
   onDone: (msg: string) => void;
   onError: (msg: string) => void;
+  onCancel: () => void;
 }) {
-  const [type, setType] = useState("openai");
-  const [name, setName] = useState("Primary provider");
-  const [model, setModel] = useState(PRESETS.openai.model);
-  const [fastModel, setFastModel] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
+  const [type, setType] = useState(initial?.provider_type || "openai");
+  const [name, setName] = useState(initial?.name || "Primary provider");
+  const [model, setModel] = useState(initial?.model_id || PRESETS.openai);
+  const [fastModel, setFastModel] = useState(initial?.fast_model_id || "");
+  const [baseUrl, setBaseUrl] = useState(initial?.base_url || "");
   const [apiKey, setApiKey] = useState("");
-  const [timeout, setTimeoutS] = useState(60);
-  const [maxTokens, setMaxTokens] = useState(2048);
-  const [active, setActive] = useState(true);
+  const [timeout, setTimeoutS] = useState(initial?.timeout_s ?? 60);
+  const [maxTokens, setMaxTokens] = useState(initial?.max_output_tokens ?? 2048);
+  const [active, setActive] = useState(initial ? initial.is_active === 1 : true);
   const [busy, setBusy] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
-  const [models, setModels] = useState<string[] | null>(null);
 
   const meta = types[type];
   const needsKey = meta?.needs_key ?? true;
 
   const onTypeChange = (t: string) => {
-    setType(t);
-    setModel(PRESETS[t]?.model || "");
-    setBaseUrl("");
-    setModels(null);
-    setTestResult(null);
+    setType(t); setModel(PRESETS[t] || ""); setBaseUrl(""); setTestResult(null);
   };
 
   const doTest = async () => {
     setBusy(true); setTestResult(null);
     try {
-      const res = await fetch("/api/ai/test-unsaved", {
+      const res = await authFetch("/api/ai/test-unsaved", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -248,8 +192,7 @@ function ProviderForm({ types, encOk, onDone, onError }: {
           base_url: baseUrl || undefined, timeout_s: timeout,
         }),
       });
-      const body = (await res.json()) as TestResult;
-      setTestResult(body);
+      setTestResult((await res.json()) as TestResult);
     } catch (e) {
       onError(e instanceof Error ? e.message : "Test failed");
     } finally { setBusy(false); }
@@ -258,93 +201,78 @@ function ProviderForm({ types, encOk, onDone, onError }: {
   const save = async () => {
     setBusy(true);
     try {
-      await api.createProvider({
+      const body: Record<string, unknown> = {
         name, provider_type: type, model_id: model,
-        fast_model_id: fastModel || null,
-        base_url: baseUrl || null,
-        api_key: apiKey || null,
-        timeout_s: timeout, max_output_tokens: maxTokens,
-        is_active: active,
-      });
-      onDone(`Provider "${name}" saved.` +
-             (active ? " It is now the active provider." : ""));
+        fast_model_id: fastModel || null, base_url: baseUrl || null,
+        timeout_s: timeout, max_output_tokens: maxTokens, is_active: active,
+      };
+      if (apiKey) body.api_key = apiKey;
+      if (initial) {
+        await api.updateProvider(initial.id, body);
+        onDone(`Provider “${name}” updated.`);
+      } else {
+        await api.createProvider(body);
+        onDone(`Provider “${name}” saved.` + (active ? " It is now the active provider." : ""));
+      }
     } catch (e) {
       onError(e instanceof Error ? e.message : "Save failed");
     } finally { setBusy(false); }
   };
 
   return (
-    <div className="panel">
-      <div className="panel-head"><span className="panel-title">New provider configuration</span></div>
-      <div className="panel-body">
-        <div className="grid grid-2">
+    <div className="tw-panel" style={{ marginBottom: 16 }}>
+      <div className="tw-panel-head">
+        <span className="tw-panel-title">{initial ? `Edit “${initial.name}”` : "New provider configuration"}</span>
+        <span className="spacer" />
+        <button className="tw-btn tw-btn-sm tw-btn-ghost" onClick={onCancel}>Cancel</button>
+      </div>
+      <div className="tw-panel-body">
+        <div className="tw-grid tw-grid-2">
           <div>
-            <div className="field">
-              <label className="label">Provider type</label>
-              <select className="select" value={type} onChange={(e) => onTypeChange(e.target.value)}>
-                {Object.entries(types).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
-                ))}
+            <FormField label="Provider type">
+              <select className="tw-select" value={type} onChange={(e) => onTypeChange(e.target.value)}
+                      disabled={!!initial}>
+                {Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
-            </div>
-            <div className="field">
-              <label className="label">Configuration name</label>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div className="field">
-              <label className="label">Model ID</label>
-              <input className="input" value={model} onChange={(e) => setModel(e.target.value)}
-                     placeholder="e.g. gpt-4o-mini" />
-              <div className="hint">
-                Model IDs are entered manually because provider catalogues change.
-                Nothing is hardcoded to a model that may not exist on your account.
-              </div>
-            </div>
-            <div className="field">
-              <label className="label">Fast model ID (optional)</label>
-              <input className="input" value={fastModel}
-                     onChange={(e) => setFastModel(e.target.value)}
+            </FormField>
+            <FormField label="Configuration name">
+              <input className="tw-input" value={name} onChange={(e) => setName(e.target.value)} />
+            </FormField>
+            <FormField label="Model ID"
+              hint="Model IDs are entered manually because provider catalogues change. Nothing is hardcoded to a model that may not exist on your account.">
+              <input className="tw-input" value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g. gpt-4o-mini" />
+            </FormField>
+            <FormField label="Fast model ID (optional)">
+              <input className="tw-input" value={fastModel} onChange={(e) => setFastModel(e.target.value)}
                      placeholder="cheaper model for light tasks" />
-            </div>
+            </FormField>
           </div>
-
           <div>
-            <div className="field">
-              <label className="label">Base URL</label>
-              <input className="input" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
+            <FormField label="Base URL" hint={<>Leave empty to use the documented default: <span className="mono">{meta?.base_url}</span></>}>
+              <input className="tw-input" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
                      placeholder={meta?.base_url || "provider default"} />
-              <div className="hint">
-                Leave empty to use the documented default: <span className="mono">{meta?.base_url}</span>
-              </div>
-            </div>
-            <div className="field">
-              <label className="label">
-                API key {needsKey ? "" : "(not required)"}
-              </label>
-              <input className="input" type="password" value={apiKey}
+            </FormField>
+            <FormField label={`API key${needsKey ? "" : " (not required)"}`}
+              hint={encOk
+                ? "Encrypted with AES before being stored. Only a masked hint is ever shown."
+                : "Storage disabled: no master key configured. Use an environment variable instead."}
+              hintWarn={!encOk}>
+              <input className="tw-input" type="password" value={apiKey}
                      onChange={(e) => setApiKey(e.target.value)}
-                     placeholder={needsKey ? "sk-…" : "not required for this provider"}
+                     placeholder={initial ? "leave blank to keep the current key" : needsKey ? "sk-…" : "not required for this provider"}
                      disabled={!needsKey} />
-              <div className="hint">
-                {encOk
-                  ? "Encrypted with AES before being stored. Only a masked hint is ever shown."
-                  : "Storage disabled: no master key configured. Use an environment variable instead."}
-              </div>
-            </div>
-            <div className="row" style={{ gap: 10 }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label className="label">Timeout (s)</label>
-                <input className="input" type="number" value={timeout}
+            </FormField>
+            <div className="row" style={{ gap: 12 }}>
+              <FormField label="Timeout (s)">
+                <input className="tw-input" type="number" value={timeout}
                        onChange={(e) => setTimeoutS(Number(e.target.value))} />
-              </div>
-              <div className="field" style={{ flex: 1 }}>
-                <label className="label">Max output tokens</label>
-                <input className="input" type="number" value={maxTokens}
+              </FormField>
+              <FormField label="Max output tokens">
+                <input className="tw-input" type="number" value={maxTokens}
                        onChange={(e) => setMaxTokens(Number(e.target.value))} />
-              </div>
+              </FormField>
             </div>
-            <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5,
-                            marginBottom: 10 }}>
+            <label className="tw-check" style={{ marginBottom: 12 }}>
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
               Make this the active provider
             </label>
@@ -352,7 +280,7 @@ function ProviderForm({ types, encOk, onDone, onError }: {
         </div>
 
         {testResult ? (
-          <div className={`banner ${testResult.ok ? "banner-ok" : "banner-err"}`}>
+          <div className={`tw-banner ${testResult.ok ? "tw-banner-ok" : "tw-banner-err"}`}>
             <span>
               <strong>{testResult.ok ? "Connection OK" : "Connection failed"}</strong>
               {" — "}{testResult.provider}/{testResult.model} · {testResult.latency_ms}ms
@@ -362,28 +290,13 @@ function ProviderForm({ types, encOk, onDone, onError }: {
           </div>
         ) : null}
 
-        {models && models.length > 0 ? (
-          <div className="field">
-            <label className="label">Discovered models (click to use)</label>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, maxHeight: 120, overflow: "auto" }}>
-              {models.map((m) => (
-                <button key={m} className="chip chip-info" style={{ cursor: "pointer" }}
-                        onClick={() => setModel(m)}>{m}</button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        <div className="row" style={{ marginTop: 4 }}>
-          <button className="btn btn-sm" onClick={() => void doTest()} disabled={busy || !model}>
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="tw-btn tw-btn-sm" onClick={() => void doTest()} disabled={busy || !model}>
             Test before saving
           </button>
-          <span className="faint" style={{ fontSize: 11 }}>
-            Model listing becomes available after saving.
-          </span>
           <span className="spacer" />
-          <button className="btn btn-primary" onClick={() => void save()} disabled={busy || !model || !name}>
-            {busy ? "Saving…" : "Save provider"}
+          <button className="tw-btn tw-btn-primary" onClick={() => void save()} disabled={busy || !model || !name}>
+            {busy ? "Saving…" : initial ? "Save changes" : "Save provider"}
           </button>
         </div>
       </div>

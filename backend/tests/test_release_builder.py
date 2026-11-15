@@ -17,6 +17,8 @@ temporary directories and synthetic ZIP entries.
 """
 from __future__ import annotations
 
+import json
+import sqlite3
 import sys
 import zipfile
 from pathlib import Path
@@ -112,6 +114,89 @@ def test_build_tree_ships_deployment_artefacts(tmp_path, monkeypatch):
     assert "docker-compose.yml" in copied
     assert ".dockerignore" in copied
     assert "secret.pem" not in copied
+
+
+def test_build_tree_does_not_ship_docs(tmp_path, monkeypatch):
+    """The bundle is the runnable product plus demo data, not the docs bundle.
+
+    ``docs/`` also carries the presentation deck, the screenshots and the
+    recorded demo video, so excluding the tree keeps all of them out of the
+    archive. Putting it back in the allowlist would silently re-inflate the
+    release, which is why this is pinned.
+    """
+    src = tmp_path / "src"
+    (src / "backend").mkdir(parents=True)
+    (src / "backend" / "api.py").write_text("x = 1\n", encoding="utf-8")
+    (src / "docs" / "presentation").mkdir(parents=True)
+    (src / "docs" / "ARCHITECTURE.md").write_text("prose\n", encoding="utf-8")
+    (src / "docs" / "presentation" / "deck.pptx").write_bytes(b"PK\x03\x04deck")
+    (src / "README.md").write_text("# x\n", encoding="utf-8")
+
+    monkeypatch.setattr(mr, "ROOT", src)
+    out = tmp_path / "out"
+    out.mkdir()
+    mr.build_tree(out)
+
+    copied = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
+    assert copied == ["README.md", "backend/api.py"]
+    assert "docs" not in mr.ALLOWED_TOP_DIRS
+
+
+def test_build_tree_never_walks_the_runtime_data_dir(tmp_path, monkeypatch):
+    """data/ holds the live database and the master key, so it is never copied.
+
+    The demo dataset therefore cannot come from the tree: it is materialised by
+    export_demo_dataset below. Pinned because a single allowlist edit would
+    otherwise ship the analyst's real telemetry.
+    """
+    src = tmp_path / "src"
+    (src / "data" / "demo").mkdir(parents=True)
+    (src / "data" / "demo" / "demo-events.jsonl").write_text("{}\n", encoding="utf-8")
+    (src / "data" / "sentinelgraph.db").write_bytes(b"SQLite format 3\x00")
+    (src / "data" / "master.key").write_text("secret", encoding="utf-8")
+
+    monkeypatch.setattr(mr, "ROOT", src)
+    out = tmp_path / "out"
+    out.mkdir()
+    mr.build_tree(out)
+
+    copied = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
+    assert copied == []
+
+
+def test_export_demo_dataset_writes_jsonl_and_readme(tmp_path):
+    """The archive must carry a demo the app can use on a fresh database."""
+    db = tmp_path / "scratch.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE events (id INTEGER PRIMARY KEY, ts_utc TEXT, host TEXT, "
+        "user_name TEXT, event_type TEXT, source TEXT, process_name TEXT, "
+        "dst_ip TEXT, domain TEXT, severity TEXT, external_id TEXT, "
+        "file_path TEXT, command_line TEXT)"
+    )
+    conn.execute(
+        "INSERT INTO events (ts_utc, host, user_name, event_type) VALUES (?,?,?,?)",
+        ("2026-01-01T00:00:00Z", "WS-FIN-07", "r.santoso", "process_create"),
+    )
+    conn.commit()
+    conn.close()
+
+    out = tmp_path / "out"
+    out.mkdir()
+    written = mr.export_demo_dataset(out, db)
+
+    assert written == 1
+    lines = (out / "data" / "demo" / "demo-events.jsonl").read_text(
+        encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    record = json.loads(lines[0])
+    assert record["host"] == "WS-FIN-07"
+    assert record["timestamp"] == "2026-01-01T00:00:00Z"
+    # Blank columns are dropped rather than shipped as nulls.
+    assert "domain" not in record
+
+    readme = (out / "data" / "demo" / "README.md").read_text(encoding="utf-8")
+    assert "init" in readme and "load-demo" in readme
 
 
 # ---------------------------------------------------------------------------

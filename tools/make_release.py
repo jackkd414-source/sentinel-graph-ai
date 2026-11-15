@@ -2,7 +2,7 @@
 
 The working tree intentionally holds real telemetry (data/*.db, exported
 Sysmon/firewall/security JSON, .env, logs). None of that may ship. This script
-copies only allowlisted source/docs/assets, rebuilds the demo dataset from the
+copies only allowlisted source/assets, rebuilds the demo dataset from the
 *synthetic* fixture, verifies the result contains no real-machine PII, and only
 then produces the ZIP.
 
@@ -31,7 +31,12 @@ sys.path.insert(0, str(ROOT / "tools"))
 # Only these top level directories may ship. Anything else at the top level
 # (backups, scratch exports, alternate source trees) is ignored by default,
 # which is safer than trying to enumerate every bad name.
-ALLOWED_TOP_DIRS = {"backend", "frontend", "docs", "tools", "data", "scripts"}
+#
+# ``docs`` is deliberately absent: the release is the runnable product plus its
+# demo dataset, and the documentation bundle (including the deck and screenshots
+# under docs/) is a separate deliverable. The PII scans below tolerate the tree
+# being missing, so nothing here depends on it.
+ALLOWED_TOP_DIRS = {"backend", "frontend", "tools", "data", "scripts"}
 ALLOWED_ROOT_FILES = {
     "README.md", "requirements.txt", "requirements-dev.txt", ".env.example",
     ".gitignore", "LICENSE", "LICENSE.md", "pyproject.toml", "pytest.ini",
@@ -320,6 +325,50 @@ def run(cmd: list[str], env: dict[str, str], cwd: Path) -> subprocess.CompletedP
     return subprocess.run(cmd, cwd=str(cwd), env=env, capture_output=True, text=True)
 
 
+def export_demo_dataset(out: Path, db_path: Path) -> int:
+    """Write the shipped demo dataset from the freshly seeded scratch database.
+
+    The release never carries a database: ``data/`` holds the live one and the
+    master key, so it is never walked. That means the demo has to be materialised
+    as files instead. ``demo-events.jsonl`` is the analysable extract and the
+    README tells the reader how to load the built-in dataset into a database of
+    their own. Returns the number of events written.
+    """
+    demo_dir = out / "data" / "demo"
+    demo_dir.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        rows = conn.execute(
+            "SELECT ts_utc, host, user_name, event_type, source, process_name, "
+            "dst_ip, domain, severity, external_id, file_path, command_line "
+            "FROM events ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    cols = ["timestamp", "host", "user_name", "event_type", "source", "process_name",
+            "dst_ip", "domain", "severity", "external_id", "file_path", "command_line"]
+    with (demo_dir / "demo-events.jsonl").open("w", encoding="utf-8") as fh:
+        for row in rows:
+            rec = {c: v for c, v in zip(cols, row) if v not in (None, "")}
+            fh.write(json.dumps(rec) + "\n")
+
+    (demo_dir / "README.md").write_text(
+        "# Demo dataset (synthetic)\n\n"
+        "`demo-events.jsonl` is generated from `sentinelgraph/demo_data.py` and\n"
+        "contains only synthetic values (WS-FIN-07, r.santoso, RFC 5737 IPs,\n"
+        "*.example domains). No runtime database ships with this release.\n\n"
+        "The dataset is also built into the application, so the quickest path is\n"
+        "the \"Load demo dataset\" action on the dashboard. To seed a database\n"
+        "without the UI:\n\n"
+        "    python -m sentinelgraph init\n"
+        "    python -m sentinelgraph load-demo\n",
+        encoding="utf-8",
+    )
+    return len(rows)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="release/sentinelgraph-ai")
@@ -372,33 +421,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print("[4/7] database PII scan clean (0 matches)")
 
-        demo_dir = out / "data" / "demo"
-        demo_dir.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-        rows = conn.execute(
-            "SELECT ts_utc, host, user_name, event_type, source, process_name, "
-            "dst_ip, domain, severity, external_id, file_path, command_line "
-            "FROM events ORDER BY id"
-        ).fetchall()
-        cols = ["timestamp", "host", "user_name", "event_type", "source", "process_name",
-                "dst_ip", "domain", "severity", "external_id", "file_path", "command_line"]
-        demo_jsonl = demo_dir / "demo-events.jsonl"
-        with demo_jsonl.open("w", encoding="utf-8") as fh:
-            for row in rows:
-                rec = {c: v for c, v in zip(cols, row) if v not in (None, "")}
-                fh.write(json.dumps(rec) + "\n")
-        conn.close()
-        (demo_dir / "README.md").write_text(
-            "# Demo dataset (synthetic)\n\n"
-            "`demo-events.jsonl` is generated from `sentinelgraph/demo_data.py` and\n"
-            "contains only synthetic values (WS-FIN-07, r.santoso, RFC 5737 IPs,\n"
-            "*.example domains). No runtime database ships with this release.\n\n"
-            "Create a local database and load the demo:\n\n"
-            "    python -m sentinelgraph init\n"
-            "    python -m sentinelgraph load-demo\n",
-            encoding="utf-8",
-        )
-        print(f"[5/7] shipped {len(rows)} synthetic events -> data/demo/demo-events.jsonl")
+        shipped = export_demo_dataset(out, db_path)
+        print(f"[5/7] shipped {shipped} synthetic events -> data/demo/demo-events.jsonl")
 
         # Text + dataset PII scan over the whole release (docs, source, demo).
         text_hits = scan_release_text(out)

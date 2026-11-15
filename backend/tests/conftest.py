@@ -30,6 +30,11 @@ def app_env(tmp_path, monkeypatch):
     monkeypatch.setenv("SG_ARTIFACT_DIR", str(artifact_dir))
     monkeypatch.setenv("SG_MASTER_KEY", "")
     monkeypatch.setenv("SG_CORS_ORIGINS", "http://localhost:5173")
+    # The deployment docs tell you to export SG_AUTH_TOKEN before running the
+    # server. If that variable is still in the shell, every test request comes
+    # back 401 and the failures look like a code regression. Tests exercise an
+    # unauthenticated local instance, so the gate is cleared explicitly.
+    monkeypatch.setenv("SG_AUTH_TOKEN", "")
 
     config.get_settings.cache_clear()
 

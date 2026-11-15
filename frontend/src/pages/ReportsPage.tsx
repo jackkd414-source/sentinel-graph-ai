@@ -79,7 +79,7 @@ export function ReportsPage({ onOpenIncident }: { onOpenIncident: (id: number) =
     <>
       <PageHeader
         title="Reports"
-        subtitle="Investigation reports generated from stored data only — facts and hypotheses stay separated."
+        subtitle="Investigation reports generated from stored data only, facts and hypotheses stay separated."
         actions={<button className="tw-btn tw-btn-sm" onClick={() => void load()}>Refresh</button>}
       />
 
@@ -94,7 +94,7 @@ export function ReportsPage({ onOpenIncident }: { onOpenIncident: (id: number) =
               <select className="tw-select" style={{ width: 320 }} value={incidentId ?? ""}
                       onChange={(e) => setIncidentId(e.target.value ? Number(e.target.value) : null)}>
                 {incidents.length === 0 ? <option value="">No incidents available</option> : null}
-                {incidents.map((i) => <option key={i.id} value={i.id}>{i.ref} — {i.title.slice(0, 44)}</option>)}
+                {incidents.map((i) => <option key={i.id} value={i.id}>{i.ref}, {i.title.slice(0, 44)}</option>)}
               </select>
             </div>
             <div>

@@ -1,4 +1,4 @@
-// TRACEWORK icon set. Hand-drawn geometric strokes — no icon dependency.
+// TRACEWORK icon set. Hand-drawn geometric strokes, no icon dependency.
 // All icons inherit `currentColor` and default to a 16px box via CSS.
 
 import type { SVGProps } from "react";
@@ -17,7 +17,7 @@ const base = (props: P): P => ({
   ...props,
 });
 
-/** Custom brand mark: evidence nodes bound together — not a generic shield. */
+/** Custom brand mark: evidence nodes bound together, not a generic shield. */
 export function BrandMark(props: P) {
   return (
     <svg {...base({ strokeWidth: 1.5, ...props })}>

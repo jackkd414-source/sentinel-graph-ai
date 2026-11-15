@@ -1,4 +1,4 @@
-# Panduan demo — SentinelGraph AI
+# Panduan demo, SentinelGraph AI
 
 Durasi target: **3 menit** untuk presentasi, **10 menit** untuk sesi tanya jawab.
 Semua langkah di bawah sudah diverifikasi berjalan pada build saat ini.
@@ -18,7 +18,7 @@ rm -f data/sentinelgraph.db*
 Buka `http://127.0.0.1:8088/` di browser. Pastikan Dashboard menampilkan **29 event,
 10 alert, 4 insiden**. Bila kosong, klik **Load demo**.
 
-**Opsional — siapkan provider AI.** Bila tidak ada kunci nyata, gunakan stub lokal agar
+**Opsional, siapkan provider AI.** Bila tidak ada kunci nyata, gunakan stub lokal agar
 jalur AI tetap bisa didemokan:
 
 ```bash
@@ -36,10 +36,10 @@ mekanisme pertahanan, bukan kualitas model.
 
 ### 1. Dashboard (20 detik)
 
-> "Ini bukan dashboard kosong. 29 event, 10 alert, 4 insiden — semuanya berasal dari
+> "Ini bukan dashboard kosong. 29 event, 10 alert, 4 insiden, semuanya berasal dari
 > tabel. Setiap angka bisa ditelusuri."
 
-Tunjuk panel **Analysis Engine**: bila AI off, tertulis "No AI provider configured —
+Tunjuk panel **Analysis Engine**: bila AI off, tertulis "No AI provider configured -
 semua fitur deteksi, korelasi, graf, dan laporan berjalan tanpa AI."
 
 ### 2. Buka INC-0001 → Overview (30 detik)
@@ -61,7 +61,7 @@ Buka tab **Timeline**. Sembilan event berurutan:
 5. Akses file sensitif (Finance & HR)
 6. Transfer keluar 14,7 MB
 
-> "Ini adalah 'story' dalam tagline — tapi setiap baris adalah event yang tersimpan,
+> "Ini adalah 'story' dalam tagline, tapi setiap baris adalah event yang tersimpan,
 > bukan narasi yang dibuat-buat."
 
 ### 4. Attack graph (35 detik)
@@ -79,27 +79,27 @@ evidence: #12, #13, #14
 atau untuk relasi turunan:
 
 ```
-derived relation — no single source event
+derived relation, no single source event
 ```
 
 > "Perbedaan ini penting. Kami tidak mencampur fakta dengan turunan."
 
-### 5. AI analysis — momen kunci (60 detik)
+### 5. AI analysis, momen kunci (60 detik)
 
 Buka tab **AI analysis**, klik **Analyze with AI**.
 
 Tunjuk hasilnya:
 
 - Dua hipotesis muncul
-- Satu berlabel **evidence-linked** — punya sitasi event nyata
-- Satu berlabel **no surviving evidence** — sitasi dari model semuanya palsu
+- Satu berlabel **evidence-linked**, punya sitasi event nyata
+- Satu berlabel **no surviving evidence**, sitasi dari model semuanya palsu
 - Di bawah: "Evidence guard: 6 citation(s) ... were removed"
 
-> "Model mencoba mengarang. Ia menyebut event 9999, 8888, 6666 — yang tidak ada.
+> "Model mencoba mengarang. Ia menyebut event 9999, 8888, 6666, yang tidak ada.
 > Setiap sitasi diperiksa ke database. Yang tidak ada dibuang. Hipotesis yang kehilangan
 > seluruh buktinya tetap ditampilkan, tapi ditandai jelas sebagai klaim tanpa bukti.
 >
-> Kami tidak menyembunyikannya — kami menunjukkannya. Itu inti dari produk ini."
+> Kami tidak menyembunyikannya, kami menunjukkannya. Itu inti dari produk ini."
 
 Tunjuk disclaimer di bawah ringkasan: *"Summary is free-form model text and is not
 verified against the event store."*
@@ -119,12 +119,12 @@ Buka tab **Report**, klik **Download** (markdown). Buka seksi 7:
 ## Pertanyaan yang kemungkinan muncul
 
 **"Apakah ini benar-benar pakai AI?"**
-> "Jalur AI-nya nyata — kami menguji ke api.openai.com dan mendapat 401 asli karena
+> "Jalur AI-nya nyata, kami menguji ke api.openai.com dan mendapat 401 asli karena
 > kuncinya tidak valid. Saat ini kami tidak punya kredensial valid, jadi demo memakai
 > stub lokal. Yang terbukti adalah mekanisme pertahanannya, bukan kualitas modelnya."
 
 **"Bagaimana kalau model-nya pintar dan tidak berhalusinasi?"**
-> "Justru itu intinya — kami tidak mengandalkan model untuk jujur. Setiap sitasi
+> "Justru itu intinya, kami tidak mengandalkan model untuk jujur. Setiap sitasi
 > diverifikasi. Kalau model jujur, semua hipotesis jadi evidence-linked. Kalau tidak,
 > ketahuan."
 
@@ -145,7 +145,7 @@ Buka tab **Report**, klik **Download** (markdown). Buka seksi 7:
 |---|---|
 | Dashboard kosong | Klik **Load demo** |
 | Graf bertumpuk | Muat ulang halaman (layout dihitung ulang) |
-| AI analysis error | Buka **AI Providers** → **Test**; bila gagal, lanjutkan demo tanpa AI — semua fitur lain jalan |
+| AI analysis error | Buka **AI Providers** → **Test**; bila gagal, lanjutkan demo tanpa AI, semua fitur lain jalan |
 | Halaman putih | Buka konsol browser; laporkan apa adanya, jangan mengklaim berhasil |
 
 Jangan pernah mengklaim fitur berjalan bila belum terlihat berjalan.

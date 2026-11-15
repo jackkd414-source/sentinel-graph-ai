@@ -1,4 +1,4 @@
-# Slide deck — SentinelGraph AI
+# Slide deck, SentinelGraph AI
 
 **Format:** 10 slide. Satu ide per slide. Rasio 16:9.
 **Waktu presentasi:** 10 menit (Babak 2 final), atau 3 menit bila dipangkas.
@@ -6,7 +6,7 @@
 
 ---
 
-## Slide 1 — Judul
+## Slide 1, Judul
 
 ```
 SentinelGraph AI
@@ -14,7 +14,7 @@ From Signals to Story
 
 Investigasi insiden yang bisa dipertanggungjawabkan
 
-Kartika Cyber Hackathon 2026 — Defensive Shield
+Kartika Cyber Hackathon 2026, Defensive Shield
 [Nama Tim] · [Anggota 1] · [Anggota 2]
 ```
 
@@ -23,14 +23,14 @@ di slide berikutnya. Slide ini hanya 5 detik.
 
 ---
 
-## Slide 2 — Masalahnya bukan data
+## Slide 2, Masalahnya bukan data
 
 **Judul:** Kita punya terlalu banyak alert, terlalu sedikit cerita
 
 **Isi (3 poin, bukan paragraf):**
 
 - Analis menerima puluhan alert per hari. Masing-masing benar. Semuanya terpisah.
-- Cerita serangan disusun manual di kepala analis — dan hilang saat pindah shift.
+- Cerita serangan disusun manual di kepala analis, dan hilang saat pindah shift.
 - Laporan akhirnya berisi klaim yang tidak bisa dipertahankan saat dipersoalkan.
 
 **Kalimat kunci:** *"Masalahnya bukan kekurangan data. Masalahnya tidak ada yang bisa
@@ -38,7 +38,7 @@ membuktikan bahwa cerita yang kita susun itu benar."*
 
 ---
 
-## Slide 3 — Dua pendekatan yang gagal
+## Slide 3, Dua pendekatan yang gagal
 
 **Judul:** SIEM terlalu mentah, LLM terlalu percaya diri
 
@@ -54,9 +54,9 @@ jawaban atas 'apa yang bisa saya buktikan'."*
 
 ---
 
-## Slide 4 — Solusi: tiga lapis yang tidak dicampur
+## Slide 4, Solusi: tiga lapis yang tidak dicampur
 
-**Judul:** Fakta, turunan, hipotesis — dipisahkan secara eksplisit
+**Judul:** Fakta, turunan, hipotesis, dipisahkan secara eksplisit
 
 **Visual:** tiga kotak bertingkat
 
@@ -78,7 +78,7 @@ naik lapis tanpa bukti."*
 
 ---
 
-## Slide 5 — Mekanisme inti: evidence guard
+## Slide 5, Mekanisme inti: evidence guard
 
 **Judul:** AI tidak bisa berbohong tanpa ketahuan
 
@@ -94,7 +94,7 @@ catat ID yang dikirim  →  kirim ke model  →  validasi skema
 
 **Poin pendukung:**
 
-- ID karangan dibuang. Nilai non-integer seperti `1.5` ditolak — bukan diam-diam
+- ID karangan dibuang. Nilai non-integer seperti `1.5` ditolak, bukan diam-diam
   menjadi `1`.
 - Jumlah sitasi yang dibuang **dilaporkan ke pengguna**, tidak dibersihkan diam-diam.
 - Hipotesis tanpa bukti tetap tampil, bertanda `no surviving evidence`.
@@ -104,7 +104,7 @@ terlihat."*
 
 ---
 
-## Slide 6 — Bukti: model benar-benar mencoba berbohong
+## Slide 6, Bukti: model benar-benar mencoba berbohong
 
 **Judul:** Diuji dengan model yang sengaja tidak jujur
 
@@ -123,7 +123,7 @@ yang berjalan."*
 
 ---
 
-## Slide 7 — Produknya berjalan
+## Slide 7, Produknya berjalan
 
 **Judul:** Bukan mockup
 
@@ -133,7 +133,7 @@ yang berjalan."*
 
 - 311 test otomatis lulus
 - 22/22 pemeriksaan end-to-end PASS (verdict berbasis exit code)
-- 4 insiden, 60 node, 52 relasi graf — **setiap relasi membawa ID event sumbernya**
+- 4 insiden, 60 node, 52 relasi graf, **setiap relasi membawa ID event sumbernya**
 - Rule engine berjalan tanpa AI dan tanpa jaringan
 
 **Kalimat kunci:** *"Cabut provider AI-nya, semua fitur deteksi, korelasi, graf, dan
@@ -141,7 +141,7 @@ laporan tetap berjalan."*
 
 ---
 
-## Slide 8 — Yang membedakan: laporan yang jujur
+## Slide 8, Yang membedakan: laporan yang jujur
 
 **Judul:** Kami menyatakan apa yang tidak bisa dibuktikan
 
@@ -157,17 +157,17 @@ mengatakan 'saya belum bisa membuktikan ini'."*
 
 ---
 
-## Slide 9 — Kelayakan
+## Slide 9, Kelayakan
 
 **Judul:** Ringan, auditabel, jalan tanpa internet
 
-**Kiri — stack:**
+**Kiri, stack:**
 - Python 3.11 + FastAPI
-- SQLite tanpa ORM — setiap query bisa dibaca saat audit
+- SQLite tanpa ORM, setiap query bisa dibaca saat audit
 - React + TypeScript + Vite
-- Attack graph SVG tulisan tangan — tanpa dependensi berat
+- Attack graph SVG tulisan tangan, tanpa dependensi berat
 
-**Kanan — jalur produksi (sudah dipetakan):**
+**Kanan, jalur produksi (sudah dipetakan):**
 1. Autentikasi + RBAC
 2. TLS di belakang reverse proxy
 3. Konektor SIEM/EDR
@@ -177,7 +177,7 @@ mengatakan 'saya belum bisa membuktikan ini'."*
 
 ---
 
-## Slide 10 — Penutup
+## Slide 10, Penutup
 
 **Judul:** Dari sinyal menjadi cerita
 
@@ -185,7 +185,7 @@ mengatakan 'saya belum bisa membuktikan ini'."*
 
 > Deteksi deterministik yang bisa diaudit.
 > Graf yang setiap garisnya berbukti.
-> AI yang diperlakukan sebagai tersangka — bukan saksi.
+> AI yang diperlakukan sebagai tersangka, bukan saksi.
 
 **Penutup:** *"SentinelGraph AI."*
 
@@ -199,7 +199,7 @@ mengatakan 'saya belum bisa membuktikan ini'."*
 | 2 | 0:15 | Masalah |
 | 4 | 0:40 | Tiga lapis |
 | 5 | 1:10 | Evidence guard |
-| 6 | 1:45 | Hasil uji adversarial — **wajib** |
+| 6 | 1:45 | Hasil uji adversarial, **wajib** |
 | 8 | 2:20 | "NOT established" |
 | 10 | 2:50 | Penutup |
 
@@ -215,7 +215,7 @@ Slide 3, 7, dan 9 dilewati. Bila ditanya, jawab dari slide lengkap.
 > ada, dan hanya lewat gerbang validasi."
 
 **"Bagaimana kalau modelnya pintar dan tidak berhalusinasi?"**
-> "Justru itu intinya — kami tidak mengandalkan model untuk jujur. Kalau model jujur,
+> "Justru itu intinya, kami tidak mengandalkan model untuk jujur. Kalau model jujur,
 > semua hipotesis jadi evidence-linked. Kalau tidak, ketahuan dan dilaporkan. Yang
 > penting bukan hasilnya, tapi bahwa hasilnya bisa diperiksa."
 
@@ -236,7 +236,7 @@ Slide 3, 7, dan 9 dilewati. Bila ditanya, jawab dari slide lengkap.
 
 **"Apa rencana setelah hackathon?"**
 > "Tiga hal berurutan: autentikasi, konektor SIEM, lalu kalibrasi rule terhadap baseline
-> nyata. Pola evidence guard-nya bisa dipakai di sistem lain — itu bagian yang paling
+> nyata. Pola evidence guard-nya bisa dipakai di sistem lain, itu bagian yang paling
 > layak dibawa keluar dari proyek ini."
 
 ---

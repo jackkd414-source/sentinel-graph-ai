@@ -38,7 +38,7 @@ export function IncidentsList({ onOpen }: { onOpen: (id: number) => void }) {
       <span className="mono num">{i.alert_count}</span>) },
     { key: "hosts", header: "Affected assets", width: 220, render: (i) => (
       <span className="mono truncate" style={{ display: "block", maxWidth: 220 }}
-            title={i.hosts.join(", ")}>{i.hosts.join(", ") || "—"}</span>) },
+            title={i.hosts.join(", ")}>{i.hosts.join(", ") || "-"}</span>) },
     { key: "first", header: "First seen", width: 158, render: (i) => (
       <span className="mono num">{fmtTime(i.first_ts)}</span>) },
   ];

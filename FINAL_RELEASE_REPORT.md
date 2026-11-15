@@ -1,9 +1,9 @@
-# FINAL RELEASE REPORT — SentinelGraph AI
+# FINAL RELEASE REPORT, SentinelGraph AI
 
 **Tanggal:** 2026-11-14
 **Fase:** Final validation patch (fix suite rilis + sinkronisasi dokumen + clean build + release baru)
 **Repo:** `~/sentinelgraph-ai` (source release dari source code terbaru; tanpa fitur produk baru)
-**Status:** RELEASE READY — 311/311 test hijau (termasuk di dalam bundle rilis), E2E 22/22 PASS,
+**Status:** RELEASE READY, 311/311 test hijau (termasuk di dalam bundle rilis), E2E 22/22 PASS,
 frontend clean install + build sukses, arsip bersih, PII 0.
 
 > Dokumen ini hanya memuat angka yang benar-benar diukur pada sesi ini. Klaim yang tidak
@@ -15,10 +15,10 @@ frontend clean install + build sukses, arsip bersih, PII 0.
 
 | # | Pekerjaan | Hasil |
 |---|---|---|
-| 1 | Tiga kegagalan `backend/tests/test_ci_config.py` **di dalam clean release** (`.github` tidak ikut dikemas) | FIXED — workflow hanya file yang diperlukan kini dikemas |
-| 2 | Sinkronisasi dokumentasi (README, LIMITATIONS, PROPOSAL, SLIDES, TESTING) | SELESAI — angka test, E2E, build, dan provider disamakan |
-| 3 | Clean install frontend (`npm ci`) + build | SELESAI — `npm ci` exit 0, `npm run build` exit 0 |
-| 4 | Release baru + verifikasi arsip | SELESAI — 109 entri, 0 entri terlarang, PII 0 |
+| 1 | Tiga kegagalan `backend/tests/test_ci_config.py` **di dalam clean release** (`.github` tidak ikut dikemas) | FIXED, workflow hanya file yang diperlukan kini dikemas |
+| 2 | Sinkronisasi dokumentasi (README, LIMITATIONS, PROPOSAL, SLIDES, TESTING) | SELESAI, angka test, E2E, build, dan provider disamakan |
+| 3 | Clean install frontend (`npm ci`) + build | SELESAI, `npm ci` exit 0, `npm run build` exit 0 |
+| 4 | Release baru + verifikasi arsip | SELESAI, 109 entri, 0 entri terlarang, PII 0 |
 | 5 | Laporan akhir ini | SELESAI |
 
 ### Keputusan distribusi CI (eksplisit)
@@ -47,7 +47,7 @@ Perbaikan di `tools/make_release.py` bersifat **allowlist eksak**:
 
 - Baseline sebelum patch di dalam bundle: 311 collected, **308 passed, 3 failed**.
 - Sesudah patch: **311 passed, 0 failed**.
-- Warning tunggal berasal dari `starlette.testclient` (`httpx` deprecated) — bukan kegagalan.
+- Warning tunggal berasal dari `starlette.testclient` (`httpx` deprecated), bukan kegagalan.
 - Tidak ada test yang dihapus, dilemahkan, atau di-skip untuk membuat hasil hijau.
 
 Fokus release-builder pada sesi ini dijalankan lewat bundling + ekstraksi + `pytest` penuh
@@ -110,9 +110,9 @@ dist/assets/index-C0dcEcDz.js    242.64 kB │ gzip: 71.16 kB
 
 | Provider | Dinyatakan? | Bukti |
 |---|---|---|
-| **OpenRouter (`deepseek-v4.1-flash`)** | Ya — end-to-end, kunci nyata (DB runtime) | 6 `ai_runs` tercatat (2026-11-12): **3 `ok`**, 2 `validation_failed` (output terpotong `finish_reason=length` sebelum default token dinaikkan), 1 `timeout`. `provider_configs` id=3 `Primary provider` tipe `openrouter`, aktif, `secret_enc` terenkripsi. Run `ok` memuat hipotesis bertag `evidence_status`, `stripped_reference_count: 0`. |
-| **OpenAI** | Ya — konektivitas saja | Request nyata ke `api.openai.com/v1` dengan kunci tidak valid → **HTTP 401**, `ok:false`, `error_category:"auth"` (direproduksi sesi ini, 2026-11-14T13:23:38Z, 598 ms). Jalur jaringan terbukti; kualitas analisis tidak diukur. |
-| Ollama | Ya — terhadap **stub lokal**, bukan Ollama asli | `provider_configs` id=1 `Stub Local`, tipe `ollama`, base `http://127.0.0.1:8099`, model `stub-model-1`. Alur koneksi/analisis/evidence-guard berjalan, modelnya stub. |
+| **OpenRouter (`deepseek-v4.1-flash`)** | Ya, end-to-end, kunci nyata (DB runtime) | 6 `ai_runs` tercatat (2026-11-12): **3 `ok`**, 2 `validation_failed` (output terpotong `finish_reason=length` sebelum default token dinaikkan), 1 `timeout`. `provider_configs` id=3 `Primary provider` tipe `openrouter`, aktif, `secret_enc` terenkripsi. Run `ok` memuat hipotesis bertag `evidence_status`, `stripped_reference_count: 0`. |
+| **OpenAI** | Ya, konektivitas saja | Request nyata ke `api.openai.com/v1` dengan kunci tidak valid → **HTTP 401**, `ok:false`, `error_category:"auth"` (direproduksi sesi ini, 2026-11-14T13:23:38Z, 598 ms). Jalur jaringan terbukti; kualitas analisis tidak diukur. |
+| Ollama | Ya, terhadap **stub lokal**, bukan Ollama asli | `provider_configs` id=1 `Stub Local`, tipe `ollama`, base `http://127.0.0.1:8099`, model `stub-model-1`. Alur koneksi/analisis/evidence-guard berjalan, modelnya stub. |
 | Anthropic / Gemini / custom_openai | **Tidak diuji dengan kunci nyata** | Adapter ada dan memakai jalur kode yang sama (`DISPATCH`). |
 
 Verifikasi kuantitatif kualitas analisis model nyata (presisi/recall) **belum** dilakukan.
@@ -136,7 +136,7 @@ Dijalankan oleh `tools/make_release.py` (exit 0):
 - `[7/7]` arsip OK.
 
 Pengecualian pemindaian hanya lewat anotasi eksplisit `PII-SCAN-ALLOW` pada baris terkait.
-Catatan jujur: piksel PNG tidak dapat dipindai sebagai teks — hanya nama file dan sidecar.
+Catatan jujur: piksel PNG tidak dapat dipindai sebagai teks, hanya nama file dan sidecar.
 
 ---
 
@@ -147,7 +147,7 @@ Catatan jujur: piksel PNG tidak dapat dipindai sebagai teks — hanya nama file 
 | Arsip | `release/sentinelgraph-ai.zip` |
 | Ukuran | **2.010.419 bytes (1,92 MB)** |
 | SHA-256 | `989d26cc18305dc7055137784181459a982a79cc71dfa1a1aeca94b634f3b4f7` |
-| Entri ZIP | **109** (folder rilis 109 file — konsisten) |
+| Entri ZIP | **109** (folder rilis 109 file, konsisten) |
 | Entri terlarang | **0** (tidak ada `.pyc`, `__pycache__`, `.db`, `.sqlite`, `.log`, `.pem`, `.key`, `.tsbuildinfo`) |
 | Variasi `.env` | hanya `.env.example` |
 | `node_modules` / virtualenv / backup | tidak ada |
@@ -178,14 +178,14 @@ Verifikasi akhir: `grep` sisa klaim basi (`262 test`, `185 passed`, `208/219 pas
 
 ## 8. Batasan / yang belum terverifikasi (dinyatakan terbuka)
 
-1. **Clean install backend dari nol (venv baru, `pip install` via jaringan)** — belum dijalankan
+1. **Clean install backend dari nol (venv baru, `pip install` via jaringan)**, belum dijalankan
    ulang dari nol; yang terbukti adalah 34 pin manifest cocok dengan environment berjalan
    dan bootstrap DB bersih berhasil. **Frontend** clean install (`npm ci`) justru sudah
    dijalankan penuh dan sukses.
 2. **Provider selain OpenRouter** (Anthropic/Gemini, dan Ollama asli) belum diuji dengan
-   kredensial/model nyata — hanya jalur kode + stub.
+   kredensial/model nyata, hanya jalur kode + stub.
 3. **Kualitas analisis AI** belum diukur secara kuantitatif (presisi/recall).
-4. **CI belum pernah berjalan di GitHub** (repo tanpa remote) — verifikasi bersifat lokal;
+4. **CI belum pernah berjalan di GitHub** (repo tanpa remote), verifikasi bersifat lokal;
    konfigurasi workflow hanya diuji secara statis oleh `test_ci_config.py`.
 5. **`make` tidak tersedia** di mesin ini (target Makefile dijalankan manual dengan perintah
    identik).
@@ -200,7 +200,7 @@ Verifikasi akhir: `grep` sisa klaim basi (`262 test`, `185 passed`, `208/219 pas
 Source release `release/sentinelgraph-ai.zip` (1,92 MB, 109 entri, sha256 `989d26cc…`)
 adalah hasil validasi akhir yang konsisten:
 
-- **Backend:** 311/311 passed — termasuk di dalam bundle rilis (sebelumnya 308/311).
+- **Backend:** 311/311 passed, termasuk di dalam bundle rilis (sebelumnya 308/311).
 - **E2E:** 22/22 PASS pada source yang diekstrak dari ZIP.
 - **Frontend:** clean install + `tsc -b` + `vite build` sukses; dist ter-ship identik byte-for-byte.
 - **PII:** 0 match pada DB sintetis, teks, demo, dan artefak screenshot.

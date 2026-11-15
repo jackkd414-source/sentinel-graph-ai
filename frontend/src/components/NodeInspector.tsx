@@ -38,8 +38,8 @@ export function NodeInspector({ nodeId, onClose }: { nodeId: number; onClose: ()
           </div>
 
           <dl className="tw-kv">
-            <dt>First seen</dt><dd className="mono">{fmtTime(data.node.attributes?.first_ts as string) || "—"}</dd>
-            <dt>Last seen</dt><dd className="mono">{fmtTime(data.node.attributes?.last_ts as string) || "—"}</dd>
+            <dt>First seen</dt><dd className="mono">{fmtTime(data.node.attributes?.first_ts as string) || "-"}</dd>
+            <dt>Last seen</dt><dd className="mono">{fmtTime(data.node.attributes?.last_ts as string) || "-"}</dd>
             <dt>Evidence events</dt><dd className="mono">{data.evidence.length}</dd>
           </dl>
 
@@ -110,7 +110,7 @@ function RelationSection({
               <div className="mono" style={{ marginTop: 3 }}>
                 {r.evidence && r.evidence.length > 0
                   ? <span style={{ color: "var(--tw-success)" }}>evidence: {r.evidence.map((x) => `#${x}`).join(", ")}</span>
-                  : <span className="faint">derived relation — no single source event</span>}
+                  : <span className="faint">derived relation, no single source event</span>}
               </div>
             </div>
           ))}

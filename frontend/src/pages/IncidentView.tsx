@@ -181,7 +181,7 @@ function OverviewTab({ detail, onOpenEvidence }: { detail: IncidentDetail; onOpe
 
   const timeline: ChipTimelineItem[] = detail.events.slice(0, 6).map((e) => ({
     id: e.id,
-    time: (e.ts_utc || e.ts_raw || "").slice(11, 19) || "—",
+    time: (e.ts_utc || e.ts_raw || "").slice(11, 19) || "-",
     text: (e.command_line || e.file_path || e.domain || e.process_name || e.action || e.event_type || "").slice(0, 64),
     tone: alertEventIds.has(e.id) ? "var(--tw-critical)" : "var(--tw-low)",
     chip: <span className="tw-chip tw-chip-plain">{alertEventIds.has(e.id) ? "Alert" : "Event"}</span>,
@@ -241,7 +241,7 @@ function OverviewTab({ detail, onOpenEvidence }: { detail: IncidentDetail; onOpe
       </div>
 
       <div className="tw-inc-row2">
-        <Card title="Findings — why this fired" icon={icon("alert")}>
+        <Card title="Findings, why this fired" icon={icon("alert")}>
           {detail.alerts.length === 0 ? <EmptyState title="No findings" /> : (
             <div className="col" style={{ gap: 14 }}>
               {detail.alerts.map((a) => (
@@ -423,12 +423,12 @@ function TimelineTab({ detail, onJumpToGraph }: { detail: IncidentDetail; onJump
                     <tr className="clickable"
                         onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
                       <td><Timestamp status={t.ts_status} raw={t.ts_utc || t.ts_raw} /></td>
-                      <td className="mono">{t.host || "—"}</td>
-                      <td className="mono">{t.user || "—"}</td>
-                      <td>{t.severity ? <SeverityIndicator severity={t.severity} /> : <span className="faint">—</span>}</td>
+                      <td className="mono">{t.host || "-"}</td>
+                      <td className="mono">{t.user || "-"}</td>
+                      <td>{t.severity ? <SeverityIndicator severity={t.severity} /> : <span className="faint">-</span>}</td>
                       <td className="mono">{t.event_type}</td>
                       <td className="truncate" style={{ maxWidth: 380 }} title={t.detail || ""}>
-                        {t.detail || "—"} <SourceLabel>{t.source}</SourceLabel>
+                        {t.detail || "-"} <SourceLabel>{t.source}</SourceLabel>
                       </td>
                       <td>
                         <button className="tw-btn tw-btn-sm" onClick={(e) => { e.stopPropagation(); onJumpToGraph(t.id); }}>
@@ -473,12 +473,12 @@ function EvidenceTab({ detail }: { detail: IncidentDetail }) {
   const cols: Column<{ event: EventRow; alerts: string[] }>[] = [
     { key: "id", header: "Event", width: 66, render: (r) => <EvidenceReference id={r.event.id} /> },
     { key: "ts", header: "Timestamp", width: 172, render: (r) => <Timestamp status={r.event.ts_status} raw={r.event.ts_utc || r.event.ts_raw} /> },
-    { key: "host", header: "Host", width: 130, render: (r) => <span className="mono">{r.event.host || "—"}</span> },
+    { key: "host", header: "Host", width: 130, render: (r) => <span className="mono">{r.event.host || "-"}</span> },
     { key: "type", header: "Event type", width: 140, render: (r) => <span className="mono">{r.event.event_type}</span> },
     { key: "supports", header: "Supports", width: 120, render: (r) => <span className="mono" style={{ color: "var(--tw-primary)" }}>{r.alerts.join(", ")}</span> },
     { key: "detail", header: "Detail", render: (r) => (
       <span className="mono truncate" style={{ display: "block", maxWidth: 380 }}>
-        {r.event.command_line || r.event.file_path || r.event.domain || r.event.process_name || r.event.action || "—"}
+        {r.event.command_line || r.event.file_path || r.event.domain || r.event.process_name || r.event.action || "-"}
       </span>) },
   ];
 
@@ -502,7 +502,7 @@ function EvidenceTab({ detail }: { detail: IncidentDetail }) {
         />
         {expanded != null ? (
           <div style={{ padding: 16, borderTop: "1px solid var(--tw-border)" }}>
-            <div className="tw-section-title">Raw record — event #{expanded}</div>
+            <div className="tw-section-title">Raw record, event #{expanded}</div>
             <pre className="tw-raw">{prettyRaw(byEvent.get(expanded)?.event.raw ?? null)}</pre>
             <div className="mono faint" style={{ marginTop: 8 }}>
               ts_status={byEvent.get(expanded)?.event.ts_status} · bytes_out={fmtBytes(byEvent.get(expanded)?.event.bytes_out)}
@@ -566,7 +566,7 @@ function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => P
         <PanelHeader title="Run analysis"
           sub={detail.ai_status.mode === "ai_enabled"
             ? `provider: ${detail.ai_status.provider}/${detail.ai_status.model}`
-            : "no provider — core mode"}
+            : "no provider, core mode"}
           actions={
             <button className="tw-btn tw-btn-sm tw-btn-primary" onClick={() => void run()} disabled={busy}>
               {busy ? "Running…" : "Analyze with AI"}
@@ -575,7 +575,7 @@ function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => P
         <div className="tw-panel-body faint" style={{ fontSize: "var(--tw-fs-secondary)", lineHeight: 1.6 }}>
           {detail.ai_status.mode !== "ai_enabled" ? (
             <>No AI provider is active. Configure one under <strong>AI Providers</strong>, or continue
-              using the deterministic engine — detection, correlation, graph, timeline and reports all
+              using the deterministic engine, detection, correlation, graph, timeline and reports all
               work without AI.</>
           ) : (
             <>Model: <span className="mono">{detail.ai_status.model}</span>
@@ -621,7 +621,7 @@ function AiTab({ detail, onReload }: { detail: IncidentDetail; onReload: () => P
 
           {result.hypotheses.length > 0 ? (
             <div className="tw-panel">
-              <PanelHeader title="Hypotheses" sub="AI-generated — distinct from observed facts" />
+              <PanelHeader title="Hypotheses" sub="AI-generated, distinct from observed facts" />
               <div className="tw-panel-body col" style={{ gap: 14 }}>
                 {result.hypotheses.map((h, i) => (
                   <div key={i} className="tw-hyp">
@@ -687,12 +687,12 @@ function RunHistory({ runs }: { runs: AiRun[] }) {
   const cols: Column<AiRun>[] = [
     { key: "id", header: "Run", width: 64, render: (r) => <span className="mono">#{r.id}</span> },
     { key: "pm", header: "Provider / model", width: 200, render: (r) => (
-      <span className="mono">{r.provider || "—"}{r.model ? ` / ${r.model}` : ""}</span>) },
+      <span className="mono">{r.provider || "-"}{r.model ? ` / ${r.model}` : ""}</span>) },
     { key: "status", header: "Status", width: 150, render: (r) => (
       <span className="mono" style={{ color: r.status.startsWith("ok") ? "var(--tw-success)" : "var(--tw-high)" }}>{r.status}</span>) },
-    { key: "lat", header: "Latency", width: 90, render: (r) => <span className="mono num">{r.latency_ms ? `${r.latency_ms}ms` : "—"}</span> },
+    { key: "lat", header: "Latency", width: 90, render: (r) => <span className="mono num">{r.latency_ms ? `${r.latency_ms}ms` : "-"}</span> },
     { key: "note", header: "Note", render: (r) => (
-      <span className="truncate" style={{ display: "block", maxWidth: 320 }}>{r.error_message || r.error_category || "—"}</span>) },
+      <span className="truncate" style={{ display: "block", maxWidth: 320 }}>{r.error_message || r.error_category || "-"}</span>) },
   ];
   return (
     <div className="tw-panel">

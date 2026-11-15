@@ -283,7 +283,7 @@ function ProviderForm({
           <div className={`tw-banner ${testResult.ok ? "tw-banner-ok" : "tw-banner-err"}`}>
             <span>
               <strong>{testResult.ok ? "Connection OK" : "Connection failed"}</strong>
-              {" — "}{testResult.provider}/{testResult.model} · {testResult.latency_ms}ms
+              {", "}{testResult.provider}/{testResult.model} · {testResult.latency_ms}ms
               {testResult.error_category ? ` · ${testResult.error_category}` : ""}
               {testResult.error_message ? `: ${testResult.error_message}` : ""}
             </span>

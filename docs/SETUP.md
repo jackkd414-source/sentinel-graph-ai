@@ -1,4 +1,4 @@
-# Setup — instalasi bersih SentinelGraph AI
+# Setup, instalasi bersih SentinelGraph AI
 
 Prasyarat: **Python >= 3.10** (diuji 3.11), **Node.js >= 18** + npm, git. Windows 10
 atau Linux/macOS. Tidak ada binary native khusus OS.

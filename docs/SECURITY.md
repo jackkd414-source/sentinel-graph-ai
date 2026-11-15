@@ -58,7 +58,7 @@ Bila aplikasi dipakai di luar demo:
 | Ringkasan AI bisa menyesatkan | **Tinggi** | Teks bebas tidak bisa diverifikasi mesin. Mitigasi: penanda eksplisit, dan deteksi tidak bergantung pada AI. |
 | Rule engine bisa false positive | Sedang | Wajar untuk deteksi berbasis rule. Mitigasi: narasi menyatakan ketidakpastian, bukan menyimpulkan kompromi. |
 | Dataset demo tidak representatif | Sedang | Data sintetis. Kemampuan deteksi pada data nyata belum diukur. |
-| Heuristik pengelompokan insiden | Rendah–sedang | Dapat memisahkan atau menggabungkan insiden secara keliru. Ditandai sebagai heuristik di laporan. |
+| Heuristik pengelompokan insiden | Rendah-sedang | Dapat memisahkan atau menggabungkan insiden secara keliru. Ditandai sebagai heuristik di laporan. |
 | Timestamp `assumed` menyesatkan urutan | Rendah | Ditandai eksplisit dan ditempatkan dengan penanda. |
 
 ## 6. Sikap terhadap klaim
@@ -129,5 +129,5 @@ keamanan yang diterima secara sadar:
 Keduanya berbeda dengan sengaja: batas payload menjaga ukuran file, sedangkan batas
 request menyediakan ruang untuk boundary multipart dan framing JSON. Konsekuensinya
 file berukuran tepat `SG_MAX_UPLOAD_BYTES` tetap diterima, sementara body yang lebih
-besar dari `SG_MAX_REQUEST_BYTES` ditolak `413` sebelum masuk ke disk atau parser —
+besar dari `SG_MAX_REQUEST_BYTES` ditolak `413` sebelum masuk ke disk atau parser -
 termasuk saat klien memakai `Transfer-Encoding: chunked` tanpa `Content-Length`.

@@ -16,8 +16,8 @@ dan bukti nyata. Diperbarui 2026-11-14.
 | P1 | API authentication + deployment safety | DONE |
 | P1 | Attack graph auto-fit / grouping / filter / navigasi | DONE |
 | P2 | Regression suite, build, E2E, release, docs | DONE |
-| — | Clean install lintas-OS dari nol | BLOCKED (tanpa jaringan) |
-| — | Regenerasi screenshot attack graph | DONE (8 PNG, 14 Nov 2026) |
+|, | Clean install lintas-OS dari nol | BLOCKED (tanpa jaringan) |
+|, | Regenerasi screenshot attack graph | DONE (8 PNG, 14 Nov 2026) |
 
 ## Temuan → perubahan → test
 
@@ -57,10 +57,10 @@ Baseline audit sebelumnya: 148 passed -> sekarang 311 passed (+163 test, +23 pad
 | Setelah cari `WS-FIN-07` (subgraf) | 14 | 0 | 0.826 |
 | Dataset besar 219 node / 387 edge | 195 (24 digroup) | 0 | 0.446 |
 | Filter incident INC-0001 | 8 | 0 | 0.826 |
-| Filter relasi `resolved` dimatikan | — | — | edge 344 → 301 |
-| Pencarian tanpa hasil | 0 | — | empty state tampil |
+| Filter relasi `resolved` dimatikan |, |, | edge 344 → 301 |
+| Pencarian tanpa hasil | 0 |, | empty state tampil |
 
-viewBox tetap 960×680; `nodeBox` selalu di dalamnya (mis. 203–757 × 63–617).
+viewBox tetap 960×680; `nodeBox` selalu di dalamnya (mis. 203-757 × 63-617).
 
 ## Temuan saat menjalankan di data nyata (bukan dataset demo)
 
@@ -75,7 +75,7 @@ hanya muncul pada skala ini dan tidak terlihat di dataset demo 52 node.
 | 16 | `credential_hint: (unreadable - master key changed?)` | start script membuat `SG_MASTER_KEY` acak tiap run | key dipersistenkan: `.env` → `data/.master_key` → generate sekali | fingerprint stabil `07be9a5e…` lintas restart |
 | 17 | `test_concurrent_analyze_does_not_corrupt_graph` gagal intermiten: `DatabaseError('not an error')` | 13 pembacaan memakai `get_conn().execute()` **tanpa** `_lock` padahal koneksi dibagi seluruh proses | helper `fetchone()`/`fetchall()` terkunci di `db.py`; semua situs dialihkan (api, detection, provider_store) | 6 run `test_api.py` + 3 run suite penuh: 0 gagal |
 | 18 | Legend attack graph terpotong di bawah viewport (panel 735px vs viewport 568px) | grid container hanya `grid-template-columns`, baris `auto` → tinggi SVG mengikuti rasio viewBox (1038×680/960 = 735) | `gridTemplateRows: minmax(0,1fr)` + `minHeight:0` (App & IncidentView); legend `maxHeight` + `overflowY:auto` | panel 429px (bottom 568), legend & 7 chip RELATIONS terlihat penuh |
-| 19 | AI analysis gagal: `validation_failed — Response contained no JSON object` | `max_output_tokens=2048`; model reasoning menghabiskan budget → `finish_reason=length`, JSON terpotong. Kasus "length dengan teks" tidak ditangani sehingga salah diklasifikasi sebagai schema error | guard `_guard_truncation()` di 4 adapter (openai-like/anthropic/gemini/ollama) → kategori `output_truncated` + pesan actionable; batas provider dinaikkan ke 8192 | analisis INC-146 `status: ok` (ringkasan + timeline + evidence refs); 4 test parametrik baru; suite 212 passed |
+| 19 | AI analysis gagal: `validation_failed, Response contained no JSON object` | `max_output_tokens=2048`; model reasoning menghabiskan budget → `finish_reason=length`, JSON terpotong. Kasus "length dengan teks" tidak ditangani sehingga salah diklasifikasi sebagai schema error | guard `_guard_truncation()` di 4 adapter (openai-like/anthropic/gemini/ollama) → kategori `output_truncated` + pesan actionable; batas provider dinaikkan ke 8192 | analisis INC-146 `status: ok` (ringkasan + timeline + evidence refs); 4 test parametrik baru; suite 212 passed |
 | 20 | AI analysis gagal lagi: `Request timed out. (timeout)` pada INC-0002 (50 event) | setelah `max_tokens` 8192, generasi insiden besar melewati `timeout_s=60`; pesan error tidak menyebut budget maupun solusi | `_net_error(exc, spec)` menyebut `timeout_s` + saran (naikkan timeout / turunkan max tokens); `REQUEST_TIMEOUT_DEFAULT` 60→120; provider aktif `timeout_s=180` | analisis INC-147 `status: ok` 16.7 s; 1 test regresi baru (31 test di `test_ai.py`) |
 
 Konsekuensi #16: API key provider yang tersimpan **sebelum** perbaikan tidak dapat
@@ -102,9 +102,9 @@ Direktori `backup/` masuk `.gitignore` dan tidak ikut release.
 
 ## Belum selesai / blocker
 
-1. **Clean install lintas-OS dari nol** — tidak bisa `pip install` di lingkungan baru
+1. **Clean install lintas-OS dari nol**, tidak bisa `pip install` di lingkungan baru
    karena jaringan/pip diblokir. Yang terbukti: 29 pin cocok dengan environment berjalan
    + bootstrap DB bersih berhasil. Klaim "teruji Linux" **tidak** dibuat.
-2. **Screenshot `03_attack_graph.png`** — sudah diregenerasi 14 Nov 2026 (Playwright 1.65.1
+2. **Screenshot `03_attack_graph.png`**, sudah diregenerasi 14 Nov 2026 (Playwright 1.65.1
    + Chromium headless). Fitur fit-to-view dibuktikan lewat pengukuran dan PNG.
-3. **Live AI provider** — hanya mock; tidak ada verifikasi kredensial nyata.
+3. **Live AI provider**, hanya mock; tidak ada verifikasi kredensial nyata.

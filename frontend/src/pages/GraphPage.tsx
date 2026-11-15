@@ -120,7 +120,7 @@ export function GraphPage({
                 onChange={(e) => setScopeId(e.target.value ? Number(e.target.value) : null)}
                 aria-label="Scope to incident">
           <option value="">Global graph (all incidents)</option>
-          {incidents.map((i) => <option key={i.id} value={i.id}>{i.ref} — {i.title.slice(0, 40)}</option>)}
+          {incidents.map((i) => <option key={i.id} value={i.id}>{i.ref}, {i.title.slice(0, 40)}</option>)}
         </select>
         <label className="tw-check">
           <input type="checkbox" checked={showInferred} onChange={(e) => setShowInferred(e.target.checked)} />
@@ -183,9 +183,9 @@ export function GraphPage({
                       <tr><td colSpan={3}><span className="faint">no relationships</span></td></tr>
                     ) : relRows.map((r) => (
                       <tr key={r.id} className="clickable" onClick={() => r.src && setSelected(r.src.id)}>
-                        <td><span className="mono faint">{(r.ts || "").slice(5, 16).replace("T", " ") || "—"}</span></td>
+                        <td><span className="mono faint">{(r.ts || "").slice(5, 16).replace("T", " ") || "-"}</span></td>
                         <td>
-                          <span className="mono" style={{ color: "var(--tw-primary)" }}>{r.src?.label ?? "—"}</span>
+                          <span className="mono" style={{ color: "var(--tw-primary)" }}>{r.src?.label ?? "-"}</span>
                           <div className="faint" style={{ fontSize: 10 }}>{r.src?.node_type ?? ""}</div>
                           <div style={{ marginTop: 3 }}>
                             <span className={`tw-chip ${r.status === "inferred" ? "tw-status-inferred" : "tw-status-observed"}`}
@@ -193,7 +193,7 @@ export function GraphPage({
                           </div>
                         </td>
                         <td>
-                          <span className="mono">{r.dst?.label ?? "—"}</span>
+                          <span className="mono">{r.dst?.label ?? "-"}</span>
                           <div className="faint" style={{ fontSize: 10 }}>{r.dst?.node_type ?? ""}</div>
                           <div className="faint" style={{ fontSize: 9.5, marginTop: 3 }}>
                             {r.evidence} event{r.evidence === 1 ? "" : "s"} · {r.status}

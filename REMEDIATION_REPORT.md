@@ -1,4 +1,4 @@
-# REMEDIATION_REPORT — SentinelGraph AI
+# REMEDIATION_REPORT, SentinelGraph AI
 
 Tanggal: 2026-11-11. Lingkup: audit remediasi keamanan + kesiapan lomba (Kartika Cyber
 Hackathon 2026). Semua angka di bawah berasal dari eksekusi nyata pada workspace ini.
@@ -99,7 +99,7 @@ TypeScript `tsc -b` bersih.
 ## 7. End-to-end verification
 
 Server dijalankan dari **pohon release itu sendiri** (`PYTHONPATH=release/.../backend`,
-DB dibootstrap ke direktori scratch — release tidak membawa DB). Alur: health → import
+DB dibootstrap ke direktori scratch, release tidak membawa DB). Alur: health → import
 dataset → normalisasi → deteksi → korelasi → insiden → attack graph → bukti → report
 markdown/html/json → frontend served. Hasil: **22/22 PASS** (health 200, root 200).
 
@@ -111,8 +111,8 @@ Verifikasi graph tambahan (browser, dataset 219 node/387 edge):
 | Subgraf `WS-FIN-07` | 14 | 0 | 0.826 |
 | 219 node (cap+group) | 195 | 0 | 0.446 |
 | Filter incident | 8 | 0 | 0.826 |
-| Filter relasi | edge 344→301 | — | — |
-| Tanpa data | empty state | — | — |
+| Filter relasi | edge 344→301 |, |, |
+| Tanpa data | empty state |, |, |
 
 ## 8. Status acceptance criteria
 
@@ -135,13 +135,13 @@ Verifikasi graph tambahan (browser, dataset 219 node/387 edge):
 - [x] Attack graph auto-fit (outOfView 0 pada 8/14/195 node)
 - [x] Node & edge dapat ditelusuri ke bukti
 - [x] AI provider dapat dikonfigurasi
-- [~] Test Connection — jalur kode ada & diuji dengan mock; **belum** dengan kredensial nyata
+- [~] Test Connection, jalur kode ada & diuji dengan mock; **belum** dengan kredensial nyata
 - [x] Mode tanpa AI tetap bekerja (core-only)
 - [x] Reports dapat diekspor (md/html/json)
 
 **Quality**
 - [x] Dependency manifest tersedia (29 pin, 0 mismatch)
-- [~] Instalasi bersih — manifest diverifikasi; **instalasi dari nol lintas-OS BLOCKED** (tanpa jaringan)
+- [~] Instalasi bersih, manifest diverifikasi; **instalasi dari nol lintas-OS BLOCKED** (tanpa jaringan)
 - [x] Frontend production build berhasil
 - [x] Backend tests berhasil (311)
 - [x] Security regression tests berhasil
@@ -151,7 +151,7 @@ Verifikasi graph tambahan (browser, dataset 219 node/387 edge):
 
 ## 9. Masalah yang masih belum selesai
 
-1. **Clean install dari nol (venv baru, lintas-OS)** — tidak dapat dijalankan karena
+1. **Clean install dari nol (venv baru, lintas-OS)**, tidak dapat dijalankan karena
    `pip install`/jaringan diblokir di lingkungan ini. Bukti yang ada: 29 pin cocok dengan
    environment berjalan; bootstrap DB bersih berhasil. Tidak ada klaim uji Linux.
 2. **Screenshot `docs/screenshots/03_attack_graph.png`** sudah diregenerasi 14 Nov 2026
@@ -209,10 +209,10 @@ Fresh install membuat DB sendiri: `python -m sentinelgraph init && ... load-demo
 ## 13. Risiko yang masih tersisa
 
 - **Single shared token**, bukan RBAC; token bocor = akses penuh. Rotasi = ganti env.
-- **Tanpa TLS internal** — butuh reverse proxy untuk akses jaringan.
+- **Tanpa TLS internal**, butuh reverse proxy untuk akses jaringan.
 - **SQLite teks-jelas** lokal; hanya API key provider yang terenkripsi (jika master key).
 - **SSRF berbasis "harus global"**, bukan allowlist host; egress policy OS tetap disarankan.
 - **Tanpa rate limiting** pada `/api/analyze`, upload.
-- **AI bisa menyesatkan** — dimitigasi evidence guard + label tidak terverifikasi, bukan
+- **AI bisa menyesatkan**, dimitigasi evidence guard + label tidak terverifikasi, bukan
   dihilangkan.
-- **Dataset demo sintetis** — bukan ukuran kemampuan pada data nyata.
+- **Dataset demo sintetis**, bukan ukuran kemampuan pada data nyata.

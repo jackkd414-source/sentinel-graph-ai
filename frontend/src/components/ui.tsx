@@ -7,7 +7,7 @@ import { Icons } from "./icons";
 /* ------------------------------------------------------------- helpers -- */
 
 export function fmtTime(iso: string | null | undefined): string {
-  if (!iso) return "—";
+  if (!iso) return "-";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const p = (n: number) => String(n).padStart(2, "0");
@@ -18,7 +18,7 @@ export function fmtTime(iso: string | null | undefined): string {
 }
 
 export function fmtBytes(n: number | null | undefined): string {
-  if (n == null) return "—";
+  if (n == null) return "-";
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;

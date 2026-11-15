@@ -1,5 +1,5 @@
 /**
- * Usage tutorial — a separate tab so nobody has to leave the app to learn it.
+ * Usage tutorial, a separate tab so nobody has to leave the app to learn it.
  *
  * English is the source text here; the i18n layer (src/i18n.tsx) renders it in
  * Indonesian when that language is selected, like every other screen.
@@ -15,12 +15,21 @@ interface Step {
   cta?: { label: string; route: RouteKey };
 }
 
+/** Plain-language glossary. Same wording as the rest of the UI. */
+const TERMS: Array<[string, string]> = [
+  ["Event", "One normalised log line. The raw material everything else is built from."],
+  ["Alert", "A detection rule matched these events. A lead worth checking, not a conclusion."],
+  ["Incident", "Alerts sharing a host or account, merged so you investigate once, not ten times."],
+  ["Evidence", "The stored events behind a claim. Open any finding and you land on them."],
+  ["AI", "Helps read and write up. It never decides what is true, the evidence does."],
+];
+
 const STEPS: Step[] = [
   {
     n: 1,
     title: "Open the app",
     body: [
-      "The workspace opens on the Dashboard. Every number there is live — it reflects the database, not a mock.",
+      "The workspace opens on the Dashboard. Every number there is live, it reflects the database, not a mock.",
       "Nothing works without data, so this is always the first step.",
     ],
     cta: { label: "Go to Dashboard", route: "dashboard" },
@@ -41,7 +50,7 @@ const STEPS: Step[] = [
     body: [
       "Open Detection Rules and read what fired.",
       "Each alert cites the exact events that triggered it. A detection is a lead to check, never a conclusion.",
-      "You can toggle a rule off and the whole pipeline re-runs — useful to see what one rule contributes.",
+      "You can toggle a rule off and the whole pipeline re-runs, useful to see what one rule contributes.",
     ],
     cta: { label: "Go to Detection Rules", route: "rules" },
   },
@@ -51,7 +60,7 @@ const STEPS: Step[] = [
     body: [
       "Alerts that share a host or account are already grouped into one incident. Open the one that matters.",
       "Inside an incident you get the summary, the timeline, the findings and the linked evidence in one place.",
-      "Mark it as investigating or closed as you work. Status is yours to set — the tool does not guess it.",
+      "Mark it as investigating or closed as you work. Status is yours to set, the tool does not guess it.",
     ],
     cta: { label: "Open Incidents", route: "incidents" },
   },
@@ -70,7 +79,7 @@ const STEPS: Step[] = [
     title: "Check the evidence",
     body: [
       "Open Evidence Repository to see the exact stored records behind any claim.",
-      "The raw record is shown as stored — nothing is paraphrased, so you can verify by hand.",
+      "The raw record is shown as stored, nothing is paraphrased, so you can verify by hand.",
       "If a citation points at an event that is missing, the report says so instead of hiding it.",
     ],
     cta: { label: "Go to Evidence Repository", route: "evidence" },
@@ -110,7 +119,7 @@ export function TutorialPage({ onNavigate }: { onNavigate: (r: RouteKey) => void
     <>
       <PageHeader
         title="How to use SentinelGraph"
-        subtitle="A guided tour of the whole workflow — no manual needed. Work through it top to bottom, or jump to a step."
+        subtitle="A guided tour of the whole workflow, no manual needed. Work through it top to bottom, or jump to a step."
       />
 
       <ol className="tw-tut-index">
@@ -119,6 +128,7 @@ export function TutorialPage({ onNavigate }: { onNavigate: (r: RouteKey) => void
             <a href={`#tw-step-${s.n}`}>{s.title}</a>
           </li>
         ))}
+        <li><a href="#tw-step-terms">What the words mean</a></li>
       </ol>
 
       <div className="tw-tut">
@@ -140,8 +150,26 @@ export function TutorialPage({ onNavigate }: { onNavigate: (r: RouteKey) => void
         ))}
 
         <p className="tw-tut-end">
-          That is the whole loop. Import, detect, investigate, report — repeat.
+          That is the whole loop. Import, detect, investigate, report, repeat.
         </p>
+
+        <section className="tw-tut-step" id="tw-step-terms">
+          <span className="tw-tut-n tw-tut-n-alt">?</span>
+          <div className="tw-tut-body">
+            <h2 className="tw-tut-title">What the words mean</h2>
+            <dl className="tw-terms">
+              {TERMS.map(([term, meaning]) => (
+                <div className="tw-term" key={term}>
+                  <dt className="tw-term-name">{term}</dt>
+                  <dd className="tw-term-text">{meaning}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="tw-terms-note">
+              Facts and hypotheses are always kept visually apart: what was observed is marked separately from what is inferred.
+            </p>
+          </div>
+        </section>
       </div>
     </>
   );

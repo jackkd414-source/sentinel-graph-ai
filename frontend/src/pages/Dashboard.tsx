@@ -9,21 +9,15 @@ import {
 } from "../components/ui";
 import { Icons } from "../components/icons";
 import { Donut } from "../components/widgets";
-import { StartHere } from "../components/guide";
-import type { RouteKey } from "../routes";
 
 interface Props {
   onOpenIncident: (id: number) => void;
   onLoadDemo: () => Promise<void>;
   demoBusy: boolean;
   reloadKey: number;
-  onNavigate: (route: RouteKey) => void;
 }
 
-const GUIDE_KEY = "sg.guide.hidden";
-
-export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey, onNavigate }: Props) {
-  const [showGuide, setShowGuide] = useState(() => localStorage.getItem(GUIDE_KEY) !== "1");
+export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey }: Props) {
   const [health, setHealth] = useState<Health | null>(null);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -52,17 +46,12 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey, onN
   if (!health) return null;
 
   const c = health.counts;
-  const isEmpty = c.events === 0;
   const sevCounts = alerts.reduce<Record<string, number>>((acc, a) => {
     acc[a.severity] = (acc[a.severity] || 0) + 1;
     return acc;
   }, {});
   const openIncidents = incidents.filter((i) => i.status === "open").length;
   const affected = new Set(alerts.flatMap((a) => (a.host ? [a.host] : []))).size;
-  const nextIncident = incidents.find((i) => i.status === "open") ?? null;
-
-  const dismissGuide = () => { localStorage.setItem(GUIDE_KEY, "1"); setShowGuide(false); };
-  const restoreGuide = () => { localStorage.removeItem(GUIDE_KEY); setShowGuide(true); };
 
   const incidentCols: Column<IncidentSummary>[] = [
     { key: "sev", header: "Severity", width: 96, render: (i) => <SeverityIndicator severity={i.severity} /> },
@@ -72,7 +61,7 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey, onN
     ) },
     { key: "asset", header: "Affected asset", width: 150, render: (i) => (
       <span className="mono truncate" style={{ display: "block", maxWidth: 150 }}
-            title={i.hosts.join(", ")}>{i.hosts[0] || "—"}</span>
+            title={i.hosts.join(", ")}>{i.hosts[0] || "-"}</span>
     ) },
     { key: "last", header: "Last activity", width: 158, render: (i) => <span className="mono num">{fmtTime(i.last_ts)}</span> },
     { key: "status", header: "Status", width: 118, render: (i) => <StatusIndicator status={i.status} /> },
@@ -84,7 +73,7 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey, onN
       <span className="truncate" style={{ display: "block", maxWidth: 420 }} title={a.title}>{a.title}</span>
     ) },
     { key: "sev", header: "Severity", width: 96, render: (a) => <SeverityIndicator severity={a.severity} /> },
-    { key: "host", header: "Host", width: 140, render: (a) => <span className="mono">{a.host || "—"}</span> },
+    { key: "host", header: "Host", width: 140, render: (a) => <span className="mono">{a.host || "-"}</span> },
     { key: "first", header: "First seen", width: 158, render: (a) => <span className="mono num">{fmtTime(a.first_ts)}</span> },
     { key: "ev", header: "Evidence", width: 84, align: "right", render: (a) => (
       <span className="mono num" style={{ color: "var(--tw-primary)" }}>{a.evidence.length}</span>
@@ -99,12 +88,6 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey, onN
         meta={<>Last updated <span className="mono">{fmtTime(health.time)}</span> UTC</>}
         actions={
           <>
-            {!showGuide ? (
-              <button className="tw-btn tw-btn-sm" onClick={restoreGuide}>
-                {Icons.info({ style: { width: 14, height: 14 } })}
-                How this works
-              </button>
-            ) : null}
             <button className="tw-btn tw-btn-sm" onClick={() => void load()} disabled={loading}>
               {Icons.refresh({ style: { width: 14, height: 14 } })}
               Refresh
@@ -115,19 +98,6 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey, onN
           </>
         }
       />
-
-      {showGuide ? (
-        <StartHere
-          isEmpty={isEmpty}
-          counts={{ events: c.events, alerts: c.alerts, incidents: c.incidents, reports: c.reports }}
-          nextIncident={nextIncident}
-          demoBusy={demoBusy}
-          onLoadDemo={() => void onLoadDemo()}
-          onGo={onNavigate}
-          onOpenIncident={onOpenIncident}
-          onDismiss={dismissGuide}
-        />
-      ) : null}
 
       {error ? <div style={{ marginBottom: 20 }}><ErrorState message={error} onRetry={load} /></div> : null}
 

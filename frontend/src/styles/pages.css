@@ -1,5 +1,5 @@
 /* ==========================================================================
-   TRACEWORK — page-level composition. Layout only; primitives live in
+   TRACEWORK, page-level composition. Layout only; primitives live in
    components.css. Kept separate so pages do not invent their own styling.
    ========================================================================== */
 
@@ -29,68 +29,17 @@
 .tw-sysrow .tw-syslabel { flex: 1; color: var(--tw-text-secondary); }
 .tw-sysrow .tw-sysval { color: var(--tw-text-muted); font-family: var(--tw-font-mono); font-size: 10.5px; }
 
-/* --- dashboard self-teaching guide: start here / workflow / key terms ---- */
-.tw-start { background: var(--tw-surface); border: 1px solid var(--tw-border);
-  border-radius: var(--tw-card-radius, 12px); box-shadow: var(--tw-shadow-card);
-  padding: 18px 20px; margin-bottom: var(--tw-s4, 20px); }
-.tw-start-head { display: flex; align-items: flex-start; gap: 12px; }
-.tw-start-title { margin: 0; font-size: var(--tw-fs-section); font-weight: 650;
-  color: var(--tw-text-primary); letter-spacing: -0.01em; }
-.tw-start-sub { margin: 5px 0 0; max-width: 80ch; color: var(--tw-text-secondary);
-  font-size: var(--tw-fs-secondary); line-height: 1.6; }
-.tw-start-x { margin-left: auto; flex: none; background: transparent; border: 0;
-  color: var(--tw-text-muted); cursor: pointer; padding: 4px; border-radius: var(--tw-r-sm, 4px); }
-.tw-start-x:hover { background: var(--tw-surface-muted, #f7f8f5); color: var(--tw-text-primary); }
-
-.tw-flow { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px; margin-top: 16px; }
-.tw-flow-card { display: grid; grid-template-columns: 24px minmax(0, 1fr) 14px; gap: 10px;
-  align-items: start; text-align: left; font: inherit; color: inherit; cursor: pointer;
-  background: var(--tw-surface-muted, #f7f8f5); border: 1px solid var(--tw-border);
-  border-radius: var(--tw-r-lg, 8px); padding: 13px 14px;
-  transition: background .12s, border-color .12s; }
-.tw-flow-card:hover { background: var(--tw-primary-soft, #e8f1ed); border-color: var(--tw-primary); }
-.tw-flow-n { width: 22px; height: 22px; border-radius: 50%; background: var(--tw-primary);
-  color: #fff; font-size: 11px; font-weight: 650; display: grid; place-items: center; }
-.tw-flow-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.tw-flow-title { font-weight: 620; color: var(--tw-text-primary); font-size: var(--tw-fs-body); }
-.tw-flow-text { color: var(--tw-text-secondary); font-size: 11.5px; line-height: 1.55; }
-.tw-flow-stat { margin-top: 2px; color: var(--tw-text-muted); font-size: 10.5px; }
-.tw-flow-go { align-self: center; color: var(--tw-text-disabled); }
-.tw-flow-card:hover .tw-flow-go { color: var(--tw-primary); }
-
-.tw-start-next { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--tw-border); }
-.tw-start-nexttext { flex: 1; min-width: 260px; color: var(--tw-text-secondary);
-  font-size: var(--tw-fs-secondary); line-height: 1.6; }
-
-.tw-terms { display: flex; flex-direction: column; }
+/* --- glossary: final step of the tutorial --------------------------------- */
+.tw-terms { display: grid; gap: 0 26px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tw-term { padding: 9px 0; border-bottom: 1px solid var(--tw-border); }
-.tw-term:last-of-type { border-bottom: 0; }
-.tw-term-name { display: block; font-weight: 620; color: var(--tw-text-primary);
+.tw-term-name { margin: 0; font-weight: 620; color: var(--tw-text-primary);
   font-size: var(--tw-fs-secondary); }
-.tw-term-text { display: block; margin-top: 2px; color: var(--tw-text-secondary);
+.tw-term-text { margin: 2px 0 0; color: var(--tw-text-secondary);
   font-size: 11.5px; line-height: 1.55; }
-.tw-terms-note { margin: 12px 0 0; padding-top: 11px; border-top: 1px solid var(--tw-border);
-  color: var(--tw-text-muted); font-size: 11px; line-height: 1.6; }
-
-@media (max-width: 1240px) { .tw-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 720px) { .tw-flow { grid-template-columns: minmax(0, 1fr); } }
-
-/* glossary lives inside the guide so a first-time user never has to hunt for it */
-.tw-start-terms { margin-top: 15px; padding-top: 13px; border-top: 1px solid var(--tw-border); }
-.tw-start-terms > summary { display: flex; align-items: center; gap: 7px; cursor: pointer;
-  list-style: none; font-weight: 620; color: var(--tw-text-primary);
-  font-size: var(--tw-fs-secondary); }
-.tw-start-terms > summary::-webkit-details-marker { display: none; }
-.tw-start-terms > summary::before { content: "▸"; color: var(--tw-text-muted); font-size: 10px;
-  transition: transform .12s; }
-.tw-start-terms[open] > summary::before { transform: rotate(90deg); }
-.tw-start-terms .tw-terms { display: grid; gap: 0 26px; margin-top: 6px;
-  grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.tw-start-terms .tw-term:last-of-type { border-bottom: 1px solid var(--tw-border); }
-.tw-start-terms .tw-terms-note { grid-column: 1 / -1; }
-@media (max-width: 900px) { .tw-start-terms .tw-terms { grid-template-columns: minmax(0, 1fr); } }
+.tw-terms-note { grid-column: 1 / -1; margin: 12px 0 0; padding-top: 11px;
+  border-top: 1px solid var(--tw-border); color: var(--tw-text-muted);
+  font-size: 11px; line-height: 1.6; }
+@media (max-width: 900px) { .tw-terms { grid-template-columns: minmax(0, 1fr); } }
 
 /* ------------------------------------------------------------ tutorial -- */
 
@@ -109,6 +58,7 @@
   border-radius: var(--tw-card-radius, 12px); box-shadow: var(--tw-shadow-card); }
 .tw-tut-n { width: 28px; height: 28px; border-radius: 50%; background: var(--tw-primary);
   color: #fff; font-size: 13px; font-weight: 650; display: grid; place-items: center; }
+.tw-tut-n-alt { background: var(--tw-surface-sunken, #eef1ed); color: var(--tw-text-secondary); }
 .tw-tut-body { min-width: 0; }
 .tw-tut-title { margin: 2px 0 8px; font-size: var(--tw-fs-section); font-weight: 650;
   color: var(--tw-text-primary); letter-spacing: -0.01em; }
@@ -265,7 +215,7 @@
 }
 
 /* ==========================================================================
-   SKIN 2 — ref-1 card grids for the investigation overview
+   SKIN 2, ref-1 card grids for the investigation overview
    ========================================================================== */
 
 .tw-inc-top {

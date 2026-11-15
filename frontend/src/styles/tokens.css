@@ -1,5 +1,5 @@
 /* ==========================================================================
-   TRACEWORK — design tokens for SentinelGraph AI
+   TRACEWORK, design tokens for SentinelGraph AI
    An investigation workstation built around evidence, relationships, clarity.
    Light theme. Warm neutral canvas, white working surfaces, deep ink type,
    muted teal accent. Single source of truth for every colour, space and radius.
@@ -112,7 +112,7 @@
 }
 
 /* ==========================================================================
-   SKIN 2 (ref 1) — dark investigation rail, elevated cards
+   SKIN 2 (ref 1), dark investigation rail, elevated cards
    ========================================================================== */
 
 :root {

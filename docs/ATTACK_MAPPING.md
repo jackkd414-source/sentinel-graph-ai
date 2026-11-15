@@ -14,7 +14,7 @@ Rules** di UI (chip teknik), dan bagian temuan pada laporan MD/HTML/JSON (`**ATT
 | R-003 | Connection to known threat indicator | command_and_control | T1071.001 Application Layer Protocol: Web Protocols<br>T1105 Ingress Tool Transfer | Command and Control<br>Command and Control |
 | R-004 | Sensitive file access followed by outbound transfer | collection_exfiltration | T1005 Data from Local System<br>T1041 Exfiltration Over C2 Channel | Collection<br>Exfiltration |
 | R-005 | Cross-host activity in short window | lateral_movement | T1021 Remote Services<br>T1078 Valid Accounts | Lateral Movement<br>Defense Evasion |
-| R-006 | Event volume spike on host | anomaly_baseline | — (tidak dipetakan) | — |
+| R-006 | Event volume spike on host | anomaly_baseline |, (tidak dipetakan) |, |
 
 ## Mengapa R-006 tidak dipetakan
 
@@ -27,7 +27,7 @@ dirinya sebagai baseline anomali.
 ## Cakupan dan batasan
 
 - Yang dipetakan adalah **rule deterministik** (R-001..R-006). Analisis AI tidak
-  dipetakan ke ATT&CK karena outputnya adalah interpretasi, bukan deteksi — dan setiap
+  dipetakan ke ATT&CK karena outputnya adalah interpretasi, bukan deteksi, dan setiap
   klaimnya tetap harus merujuk event ID yang terverifikasi.
 - Pemetaan ini deskriptif, bukan klaim cakupan: SentinelGraph tidak mendeteksi semua
   teknik dalam taktik di atas, hanya perilaku yang logikanya tertulis di katalog rule.

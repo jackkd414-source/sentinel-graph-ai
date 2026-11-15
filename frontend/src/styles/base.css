@@ -1,5 +1,5 @@
 /* ==========================================================================
-   TRACEWORK — base layer: reset, typography, application shell, utilities.
+   TRACEWORK, base layer: reset, typography, application shell, utilities.
    ========================================================================== */
 
 *,
@@ -279,7 +279,7 @@ a:hover { text-decoration: underline; }
 }
 
 /* ==========================================================================
-   SKIN 2 — dark rail, search-first topbar, card primitives
+   SKIN 2, dark rail, search-first topbar, card primitives
    ========================================================================== */
 
 /* --- dark rail ----------------------------------------------------------- */

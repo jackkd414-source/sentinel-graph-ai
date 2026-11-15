@@ -1,4 +1,4 @@
-# SentinelGraph AI — From Signals to Story
+# SentinelGraph AI, From Signals to Story
 
 Platform investigasi insiden keamanan berbantuan AI untuk **Kartika Cyber Hackathon 2026**,
 kategori **Defensive Shield (Penangkalan)**.
@@ -23,9 +23,9 @@ SentinelGraph memisahkan tiga lapis secara eksplisit:
 
 | Lapis | Sumber | Bisa diverifikasi? |
 |---|---|---|
-| **Observed fact** | Event yang diimpor ke database | Ya — setiap klaim membawa ID event |
-| **Derived finding** | Rule engine deterministik (R-001..R-006) | Ya — logika rule ditampilkan |
-| **AI hypothesis** | Model bahasa, opsional | Sebagian — hanya klaim yang punya sitasi event |
+| **Observed fact** | Event yang diimpor ke database | Ya, setiap klaim membawa ID event |
+| **Derived finding** | Rule engine deterministik (R-001..R-006) | Ya, logika rule ditampilkan |
+| **AI hypothesis** | Model bahasa, opsional | Sebagian, hanya klaim yang punya sitasi event |
 
 ## 2. Arsitektur
 
@@ -44,7 +44,7 @@ SentinelGraph memisahkan tiga lapis secara eksplisit:
                                     ▼
         ┌───────────────────────────────────────────────────────┐
         │  Detection rule engine (DETERMINISTIK, tanpa AI)      │
-        │  detection.py — R-001..R-006, tiap alert → event IDs  │
+        │  detection.py, R-001..R-006, tiap alert → event IDs  │
         └───────────────┬───────────────────────────────────────┘
                         ▼
         ┌───────────────────────────────────────────────────────┐
@@ -53,7 +53,7 @@ SentinelGraph memisahkan tiga lapis secara eksplisit:
         └───────────────┬───────────────────────────────────────┘
                         ▼
    ┌────────────────────────────────────────────────────────────┐
-   │  AI layer (OPSIONAL) — ai_providers.py + ai_analysis.py    │
+   │  AI layer (OPSIONAL), ai_providers.py + ai_analysis.py    │
    │  · hanya event insiden yang dikirim                        │
    │  · output divalidasi skema                                 │
    │  · setiap ID event yang dikutip diverifikasi ke database   │
@@ -62,7 +62,7 @@ SentinelGraph memisahkan tiga lapis secara eksplisit:
                    ▼
         ┌──────────────────────────────────────────┐
         │  Reporting (md / html / json)            │
-        │  reporting.py — 10 seksi + batasan       │
+        │  reporting.py, 10 seksi + batasan       │
         └───────────────┬──────────────────────────┘
                         ▼
         ┌──────────────────────────────────────────┐
@@ -168,13 +168,13 @@ Dinyatakan terbuka agar tidak menyesatkan penilai:
 **Temuan penting saat menguji model cloud nyata:** model reasoning menghabiskan
 *seluruh* budget `max_tokens` untuk penalaran tersembunyi dan mengembalikan `content`
 kosong dengan `finish_reason: length`. Ini awalnya dilaporkan sebagai
-"Response contained no JSON object" — **menyesatkan**, karena outputnya sebenarnya
+"Response contained no JSON object", **menyesatkan**, karena outputnya sebenarnya
 terpotong, bukan tidak ada. Perbaikan:
 
 1. Adapter kini mendeteksi `finish_reason: length` + `content` kosong dan melaporkan
    `output_truncated` dengan saran menaikkan `max_tokens`.
 2. Default dinaikkan 2048 → 8192 token agar ada ruang untuk penalaran.
-3. Error tetap muncul di laporan sebagai kegagalan eksplisit — tidak ada konten AI
+3. Error tetap muncul di laporan sebagai kegagalan eksplisit, tidak ada konten AI
    yang dimasukkan bila validasi gagal.
 
 **Yang masih belum diukur:** kualitas analisis model nyata baru diuji pada satu insiden
@@ -195,7 +195,7 @@ Variabel lingkungan terkait:
 Provider didukung: `openai`, `anthropic`, `gemini`, `openrouter`, `ollama`, `custom_openai`.
 
 **SSRF guard.** Base URL provider divalidasi sebelum ada request keluar. Alamat privat,
-link-local, dan loopback diblokir — kecuali untuk `ollama` dan `custom_openai` lokal
+link-local, dan loopback diblokir, kecuali untuk `ollama` dan `custom_openai` lokal
 yang memang diarahkan ke localhost secara sengaja.
 
 ## 8. Perintah instalasi dan menjalankan
@@ -275,7 +275,7 @@ Pintu masuk kanonik: `scripts\verify.ps1` (Windows) / `bash scripts/verify.sh`
 311 passed, 1 warning in ~21s
 ```
 
-Warning yang tersisa berasal dari `starlette.testclient` (httpx deprecated) — bukan kegagalan.
+Warning yang tersisa berasal dari `starlette.testclient` (httpx deprecated), bukan kegagalan.
 
 ### Verifikasi end-to-end
 
@@ -286,7 +286,7 @@ VERDICT: PASS
 
 ### Bug yang ditemukan dan diperbaiki selama pengembangan
 
-Ini bukan daftar prestise — setiap baris adalah cacat nyata yang sempat ada:
+Ini bukan daftar prestise, setiap baris adalah cacat nyata yang sempat ada:
 
 | Bug | Dampak | Perbaikan |
 |---|---|---|
@@ -308,35 +308,35 @@ Ini bukan daftar prestise — setiap baris adalah cacat nyata yang sempat ada:
 | **Hipotesis tanpa bukti tampak setara** | Klaim karangan terlihat seperti temuan | Tag `evidence_status` |
 
 Dua bug terakhir ditemukan justru oleh uji adversarial terhadap model yang sengaja
-berbohong — bukan oleh test biasa.
+berbohong, bukan oleh test biasa.
 
 ### Skenario adversarial yang diuji
 
 Stub provider mengembalikan tiga jenis kebohongan:
 
-1. **Campuran** — 6 ID karangan bersama 1 ID asli. Hasil: 6 dibuang, hipotesis dengan
+1. **Campuran**, 6 ID karangan bersama 1 ID asli. Hasil: 6 dibuang, hipotesis dengan
    bukti asli ditandai `evidence-linked`, hipotesis tanpa bukti ditandai
    `no surviving evidence`.
-2. **Semua karangan** — 3 ID palsu. Hasil: seluruhnya dibuang, satu-satunya hipotesis
+2. **Semua karangan**, 3 ID palsu. Hasil: seluruhnya dibuang, satu-satunya hipotesis
    ditandai `unsupported`.
-3. **JSON rusak** — bukan JSON sama sekali. Hasil: `validation_failed`, tidak ada konten
+3. **JSON rusak**, bukan JSON sama sekali. Hasil: `validation_failed`, tidak ada konten
    AI yang masuk laporan, dan laporan menyatakan kegagalan secara eksplisit.
 
 ## 10. Langkah demo (3 menit)
 
-1. **Dashboard** — tunjukkan event, alert, insiden, aset; sebutkan bahwa setiap angka
+1. **Dashboard**, tunjukkan event, alert, insiden, aset; sebutkan bahwa setiap angka
    berasal dari tabel, bukan konstanta.
-2. **Load demo** — memuat dataset sintetis: 29 event, 4 insiden.
-3. **INC-0001 → Overview** — tunjukkan pemisahan tegas: "IOC match adalah fakta; host
+2. **Load demo**, memuat dataset sintetis: 29 event, 4 insiden.
+3. **INC-0001 → Overview**, tunjukkan pemisahan tegas: "IOC match adalah fakta; host
    terkompromi adalah hipotesis".
-4. **Timeline** — 9 event berurutan dari email phishing sampai transfer keluar.
-5. **Attack graph** — sorot edge; tunjukkan setiap edge membawa ID event sumbernya.
+4. **Timeline**, 9 event berurutan dari email phishing sampai transfer keluar.
+5. **Attack graph**, sorot edge; tunjukkan setiap edge membawa ID event sumbernya.
    Toggle node event untuk melihat struktur entitas.
-6. **AI analysis** — jalankan analisis. Tunjukkan:
+6. **AI analysis**, jalankan analisis. Tunjukkan:
    - hipotesis dengan bukti → `evidence-linked`
    - hipotesis karangan → `no surviving evidence`
    - jumlah sitasi yang dibuang oleh evidence guard
-7. **Report** — unduh markdown. Buka seksi 7: "Confirmed compromise: NOT established".
+7. **Report**, unduh markdown. Buka seksi 7: "Confirmed compromise: NOT established".
    Ini titik yang membedakan produk ini dari dashboard yang menakut-nakuti.
 
 ## 11. Lokasi dokumentasi
@@ -381,20 +381,20 @@ Batasan yang tersisa (jujur):
 - **AI dapat menghasilkan teks menyesatkan.** Mitigasi: sitasi diverifikasi, ringkasan
   ditandai tidak terverifikasi, deteksi tidak pernah bergantung pada AI. Teks bebas
   tetap harus dibaca sebagai klaim.
-- **Dataset demo sintetis** — bukan bukti kemampuan deteksi pada data nyata.
+- **Dataset demo sintetis**, bukan bukti kemampuan deteksi pada data nyata.
 - **Redirect HTTP** tidak diikuti oleh client provider (`follow_redirects=False`),
   sehingga tujuan redirect tak tervalidasi tidak pernah disentuh.
 
 ## 13. Langkah berikutnya
 
-1. **RBAC multi-analyst** — pemisahan hak baca/tulis; token saat ini hanya shared-secret.
-2. **Konektor SIEM/EDR** — Syslog, Wazuh, Elastic, Splunk HEC.
+1. **RBAC multi-analyst**, pemisahan hak baca/tulis; token saat ini hanya shared-secret.
+2. **Konektor SIEM/EDR**, Syslog, Wazuh, Elastic, Splunk HEC.
 3. **Kalibrasi rule** terhadap baseline nyata; R-006 khususnya.
 4. **Uji provider cloud dengan kredensial valid** dan ukur kualitas analisis secara
    kuantitatif (misalnya berapa persen hipotesis yang lolos verifikasi analis).
-5. **Penyimpanan bukti immutable** — hash chain untuk artifact.
+5. **Penyimpanan bukti immutable**, hash chain untuk artifact.
 6. **Ekspor STIX/TAXII** agar temuan bisa dibagikan ke platform lain.
-7. **Virtualisasi graph** (clustering dinamis) untuk >2000 node — cap + grouping saat ini
+7. **Virtualisasi graph** (clustering dinamis) untuk >2000 node, cap + grouping saat ini
    menangani kepadatan, tetapi belum meng-cluster secara semantik.
 
 ## Tutorial and language

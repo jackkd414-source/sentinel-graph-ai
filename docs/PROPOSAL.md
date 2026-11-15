@@ -1,4 +1,4 @@
-# Proposal — SentinelGraph AI
+# Proposal, SentinelGraph AI
 
 **Kategori:** Defensive Shield (Penangkalan)
 **Event:** Kartika Cyber Hackathon 2026
@@ -13,7 +13,7 @@ dipertanggungjawabkan**.
 
 Rata-rata SOC menerima puluhan hingga ratusan alert per hari. Setiap alert benar secara
 individual, tetapi terpisah-pisah. Analis menghabiskan waktu memindahkan potongan dari
-satu panel ke panel lain, lalu menyusun narasi secara manual di kepala — narasi yang
+satu panel ke panel lain, lalu menyusun narasi secara manual di kepala, narasi yang
 hilang begitu ia pindah shift.
 
 Dua pendekatan yang ada sekarang sama-sama bermasalah:
@@ -51,8 +51,8 @@ diterima:
 
 1. Skema output divalidasi secara ketat.
 2. Setiap ID event yang dikutip diperiksa terhadap daftar tersebut.
-3. ID yang tidak ada — termasuk nilai non-integer seperti `1.5` yang bisa diam-diam
-   berubah menjadi `1` — dibuang.
+3. ID yang tidak ada, termasuk nilai non-integer seperti `1.5` yang bisa diam-diam
+   berubah menjadi `1`, dibuang.
 4. Jumlah sitasi yang dibuang **dilaporkan ke pengguna**, tidak disembunyikan.
 5. Setiap hipotesis diberi status: `supported`, `contested`, atau `unsupported`.
 
@@ -65,7 +65,7 @@ sudah dibersihkan sehingga tampak meyakinkan.
 Seluruh kemampuan deteksi berjalan tanpa LLM dan tanpa jaringan. Enam rule deterministik
 (R-001 sampai R-006) membaca tabel event dan menghasilkan alert yang setiap barisnya
 membawa ID event sumber. Sistem tetap berfungsi penuh bila tidak ada provider AI
-dikonfigurasi — dan menyatakan itu secara terbuka di antarmuka, bukan gagal diam-diam.
+dikonfigurasi, dan menyatakan itu secara terbuka di antarmuka, bukan gagal diam-diam.
 
 ## 3. Kebaruan teknis
 
@@ -77,7 +77,7 @@ menampilkan perbedaan ini secara visual.
 **b. Penanganan timestamp yang jujur.**
 Timestamp tanpa zona tidak ditebak diam-diam. Sistem mencatat statusnya: `explicit`,
 `assumed` (dengan zona yang dideklarasikan), atau `UNKNOWN`. Timestamp yang tidak bisa
-diparse tetap disimpan dan ditandai, bukan dibuang — karena membuang bukti waktu adalah
+diparse tetap disimpan dan ditandai, bukan dibuang, karena membuang bukti waktu adalah
 bentuk ketidakjujuran tersendiri.
 
 **c. Kegagalan yang terlihat.**
@@ -109,7 +109,7 @@ Selain itu:
 - **Verifikasi end-to-end**: `tools/verify.py` menjalankan 22 pemeriksaan terhadap API
   yang berjalan dan mengembalikan verdict berbasis exit code. Hasil: **22/22 PASS**.
 - **Jalur jaringan provider diuji nyata**: permintaan ke `api.openai.com` menghasilkan
-  HTTP 401 asli, dilaporkan sebagai `ok:false` dengan kategori `auth` — bukan pura-pura
+  HTTP 401 asli, dilaporkan sebagai `ok:false` dengan kategori `auth`, bukan pura-pura
   berhasil.
 - **Provider cloud dengan kredensial valid**: OpenRouter (`deepseek-v4.1-flash`) diuji
   end-to-end; tiga `ai_runs` berstatus `ok` tercatat pada DB runtime (2026-11-12).
@@ -122,7 +122,7 @@ kuantitatif (presisi/recall terhadap dataset berlabel).
 
 **Stack:** Python 3.11 + FastAPI + SQLite (stdlib `sqlite3`, tanpa ORM) untuk backend;
 React + TypeScript + Vite untuk frontend. Attack graph digambar dengan SVG tulisan tangan
-— tanpa dependensi graf berat.
+- tanpa dependensi graf berat.
 
 **Alasan pemilihan:**
 - SQLite tanpa ORM: setiap query bisa dibaca langsung saat audit.
@@ -166,4 +166,4 @@ sendiri.
 | Inovasi teknis | 25% | Evidence guard yang membuang dan melaporkan sitasi karangan model; pemisahan eksplisit fakta/turunan/hipotesis pada setiap lapis, termasuk per relasi graf. |
 | Fungsi prototipe | 25% | Berjalan penuh. 311 test lulus, 22/22 pemeriksaan end-to-end PASS, tiga skenario adversarial terbukti tertangani. |
 | Kelayakan | 15% | Stack minimal, tanpa dependensi AI wajib, jalan tanpa internet. Jalur produksi sudah dipetakan. |
-| Dokumentasi | 10% | README, arsitektur, model ancaman, panduan demo, dan skrip video — semuanya menyatakan batasan secara eksplisit. |
+| Dokumentasi | 10% | README, arsitektur, model ancaman, panduan demo, dan skrip video, semuanya menyatakan batasan secara eksplisit. |

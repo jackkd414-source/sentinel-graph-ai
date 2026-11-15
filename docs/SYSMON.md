@@ -3,14 +3,14 @@
 ## Mengapa Sysmon?
 
 SentinelGraph berjalan tanpa Sysmon, tetapi **rule serius tidak akan pernah menyala**
-pada log Windows biasa. Alasannya terukur — dari impor `security.json` (5000 event) dan
+pada log Windows biasa. Alasannya terukur, dari impor `security.json` (5000 event) dan
 `firewall.json` (626 event) di mesin ini:
 
 | Rule | Field yang dibutuhkan | Tersedia tanpa Sysmon? |
 |---|---|---|
-| R-002 rantai proses | `parent_process` | Hampir tidak — hanya 26 dari 5000, semuanya proses boot normal |
-| R-003 koneksi ke IOC | `dst_ip` dari event koneksi | Tidak — event 5156/5157 = **0** |
-| R-004 file → transfer | `file_path`, `bytes_out` | Tidak — event 4663/4656 = **0** |
+| R-002 rantai proses | `parent_process` | Hampir tidak, hanya 26 dari 5000, semuanya proses boot normal |
+| R-003 koneksi ke IOC | `dst_ip` dari event koneksi | Tidak, event 5156/5157 = **0** |
+| R-004 file → transfer | `file_path`, `bytes_out` | Tidak, event 4663/4656 = **0** |
 
 Windows tidak mencatat ini secara default. Sysmon yang mengisinya.
 
@@ -51,7 +51,7 @@ cd <PROJECT_ROOT>
 
 Halaman **Import** → pilih `sysmon.json` → **Import**.
 
-Setelah itu buka **Attack Graph** dan **Events** — node `process`, `user`, dan `ip` akan
+Setelah itu buka **Attack Graph** dan **Events**, node `process`, `user`, dan `ip` akan
 muncul karena field-nya kini terisi.
 
 ## Ekspor berikutnya
@@ -88,7 +88,7 @@ Attack graph melonjak dari **258 → 1890 node**. Bandingkan dengan log Security
 hanya menghasilkan 258 node dan 0 field proses.
 
 Yang penting: **ini tidak otomatis menghasilkan alert banyak.** Deteksi butuh pola
-serangan nyata. Pada mesin kerja yang tidak diserang, hasilnya tetap sedikit — itu benar,
+serangan nyata. Pada mesin kerja yang tidak diserang, hasilnya tetap sedikit, itu benar,
 bukan bug. Untuk menguji bahwa rule menyala, lihat bagian berikut.
 
 ## Membuktikan rule benar-benar menyala
@@ -148,7 +148,7 @@ Sysmon akan hilang sepenuhnya; event yang sudah diekspor ke JSON tetap ada.
 |---|---|---|
 | Skrip bilang "Sysmon belum terpasang" | Belum dipasang | Jalankan `PASANG-SYSMON.bat` |
 | `sysmon.json` hampir kosong | Tidak ada aktivitas selama jendela waktu | Perbesar `-Hours`, buka beberapa aplikasi lalu ekspor lagi |
-| Impor berhasil tapi 0 alert | Data memang tidak memuat pola serangan | Lihat `docs/DATA_MANAGEMENT.md` — ini temuan, bukan bug |
+| Impor berhasil tapi 0 alert | Data memang tidak memuat pola serangan | Lihat `docs/DATA_MANAGEMENT.md`, ini temuan, bukan bug |
 | Service tidak jalan | Config ditolak | Cek `Get-WinEvent -LogName "Microsoft-Windows-Sysmon/Operational" -MaxEvents 5` |
 
 ## Catatan penting

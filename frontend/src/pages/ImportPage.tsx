@@ -157,7 +157,7 @@ export function ImportPage({ onImported }: { onImported: () => void }) {
                 </div>
                 {(result.analysis.engine_errors ?? []).length > 0 ? (
                   <div className="tw-banner tw-banner-warn" style={{ marginTop: 12 }}>
-                    <span>{result.analysis.engine_errors.length} rule(s) failed during analysis — results may be incomplete.</span>
+                    <span>{result.analysis.engine_errors.length} rule(s) failed during analysis, results may be incomplete.</span>
                   </div>
                 ) : null}
                 {result.analysis.alerts_created === 0 ? (

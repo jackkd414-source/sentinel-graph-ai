@@ -1,4 +1,4 @@
-# AI Providers — konfigurasi, keamanan, dan batasan
+# AI Providers, konfigurasi, keamanan, dan batasan
 
 SentinelGraph berjalan **tanpa AI** untuk semua fungsi inti (deteksi, korelasi, graph,
 timeline, report). AI hanya menambah analisis naratif, dan setiap klaim AI harus
@@ -21,7 +21,7 @@ merujuk bukti yang ada di database.
   `has_key`/masker, bukan nilai.
 - Di DB, key selalu dienkripsi (Fernet) sebelum disimpan. Kunci utama dari
   `SG_MASTER_KEY`, atau dibuat otomatis di `<data dir>/master.key` saat pertama
-  dipakai — tidak pernah plaintext.
+  dipakai, tidak pernah plaintext.
 - Tidak ada key di log. `redact_secrets()` menyamarkan nilai yang mirip kredensial
   pada pesan error.
 - Tidak ada fallback berbayar otomatis ke provider lain.
@@ -53,10 +53,10 @@ yang tidak ada di DB ditandai `unsupported` dan tidak masuk laporan sebagai fakt
 
 ## Uji tanpa API key
 
-Test memakai provider mock (`backend/tests/test_ai.py`, fixture `fake_provider`) —
+Test memakai provider mock (`backend/tests/test_ai.py`, fixture `fake_provider`) -
 tidak memerlukan kredensial dan tidak mengirim request keluar.
 
-## Batas token (max_tokens) — penyebab umum "AI analysis gagal"
+## Batas token (max_tokens), penyebab umum "AI analysis gagal"
 
 Model reasoning (mis. keluarga deepseek/`-flash`) memakai sebagian budget token untuk
 **hidden reasoning** sebelum menulis jawaban. Kalau `max_tokens` terlalu kecil, balasan
@@ -81,11 +81,11 @@ curl -X PATCH http://127.0.0.1:8088/api/ai/providers/<id> \
 Perilaku ini diverifikasi untuk keempat adapter (OpenAI-compatible, Anthropic, Gemini,
 Ollama) oleh `test_partial_output_at_token_ceiling_reports_truncation`.
 
-## Timeout klien — "Request timed out" pada insiden besar
+## Timeout klien, "Request timed out" pada insiden besar
 
 Insiden dengan banyak event menghasilkan prompt besar; dengan `max_tokens` tinggi,
 generasi bisa melewati batas waktu klien. Sebelum perbaikan pesannya hanya
-`Request timed out. (timeout)` — tidak memberi tahu apa yang harus diubah.
+`Request timed out. (timeout)`, tidak memberi tahu apa yang harus diubah.
 
 Sekarang pesannya menyebut anggaran dan jalan keluarnya:
 
@@ -115,7 +115,7 @@ deterministik.
   bahwa bagian deterministik tetap menjadi laporan resmi.
 - Tanpa provider aktif: laporan deterministik tetap utuh, `ai.status = "no_provider"`.
 - Bila provider gagal: `ai.status = "error"` (+ kategori, pesan ter-redaksi) dan
-  laporan deterministik tetap dikembalikan — tidak ada bagian AI palsu.
+  laporan deterministik tetap dikembalikan, tidak ada bagian AI palsu.
 - Setiap percobaan dicatat di tabel `ai_runs` dengan `task = "report"`.
 - Di UI: halaman **Reports** punya toggle **Narrative → AI-assisted**.
 
@@ -123,7 +123,7 @@ deterministik.
 
 Kunci utama untuk enkripsi API key di database diambil berurutan dari:
 
-1. `SG_MASTER_KEY` (env / `.env`) — disarankan.
+1. `SG_MASTER_KEY` (env / `.env`), disarankan.
 2. Berkas `<data dir>/master.key`, dibuat otomatis saat pertama dipakai (izin
    owner-only). Lokasi bisa dipindah dengan `SG_MASTER_KEY_FILE`.
 

@@ -1,4 +1,4 @@
-// TRACEWORK GraphCanvas — the signature attack-graph surface.
+// TRACEWORK GraphCanvas, the signature attack-graph surface.
 //
 // Raw SVG (no graph dependency): observed vs inferred relationships must be
 // distinguishable at a glance, and every node stays traceable to evidence.

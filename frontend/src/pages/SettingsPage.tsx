@@ -49,9 +49,9 @@ export function SettingsPage() {
   const auditCols: Column<AuditEntry>[] = [
     { key: "id", header: "ID", width: 60, render: (e) => <span className="mono">#{e.id}</span> },
     { key: "action", header: "Action", width: 190, render: (e) => <span className="mono" style={{ color: "var(--tw-primary)" }}>{e.action}</span> },
-    { key: "target", header: "Target", width: 200, render: (e) => <span className="mono">{e.target || "—"}</span> },
+    { key: "target", header: "Target", width: 200, render: (e) => <span className="mono">{e.target || "-"}</span> },
     { key: "detail", header: "Detail", render: (e) => (
-      <span className="truncate" style={{ display: "block", maxWidth: 380 }}>{e.detail || "—"}</span>) },
+      <span className="truncate" style={{ display: "block", maxWidth: 380 }}>{e.detail || "-"}</span>) },
     { key: "at", header: "When", width: 168, render: (e) => <span className="mono num">{fmtTime(e.created_at)}</span> },
   ];
 
@@ -71,7 +71,7 @@ export function SettingsPage() {
               <dl className="tw-kv">
                 <dt>Version</dt><dd className="mono">{health.version}</dd>
                 <dt>Database</dt><dd className="mono">{health.db}</dd>
-                <dt>Workspace</dt><dd className="mono">{projects[0]?.name || "—"}{projects[0]?.is_demo ? " (demo)" : ""}</dd>
+                <dt>Workspace</dt><dd className="mono">{projects[0]?.name || "-"}{projects[0]?.is_demo ? " (demo)" : ""}</dd>
                 <dt>Server time</dt><dd className="mono">{fmtTime(health.time)} UTC</dd>
               </dl>
             </div>
@@ -122,7 +122,7 @@ export function SettingsPage() {
                 <button className="tw-btn tw-btn-sm" onClick={dropToken} disabled={!tokenSet}>Clear</button>
               </div>
               <div className="mono faint" style={{ marginTop: 8 }}>
-                {getToken() ? `stored (${getToken().length} chars, masked)` : "—"}
+                {getToken() ? `stored (${getToken().length} chars, masked)` : "-"}
               </div>
             </div>
           </div>

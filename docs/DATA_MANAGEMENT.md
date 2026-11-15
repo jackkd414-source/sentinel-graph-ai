@@ -18,7 +18,7 @@ Setiap baris di tabel artefak punya tombol **Delete**.
 Yang terjadi saat diklik:
 1. Artefak dihapus, dan **semua event yang berasal dari file itu ikut terhapus**.
 2. Alerts, insiden, findings, dan graf **dibangun ulang** dari event yang tersisa.
-3. Nomor event yang dihapus dilaporkan, misalnya: `Deleted "logs.csv" — 4 event(s) removed, derived data rebuilt.`
+3. Nomor event yang dihapus dilaporkan, misalnya: `Deleted "logs.csv", 4 event(s) removed, derived data rebuilt.`
 
 Ini penting: menghapus artefak saja (tanpa menghapus event-nya) akan meninggalkan
 event yatim yang tetap memicu alert. Jadi penghapusan selalu diikuti rebuild.
@@ -122,7 +122,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\export-windows-logs.
 1. Buka SentinelGraph → menu **Import**.
 2. Klik **Choose file**, pilih `security.json` (atau file yang tadi dibuat).
 3. Klik **Import**.
-4. Halaman menampilkan `records_total` / `records_ok` / `records_failed` — periksa ini.
+4. Halaman menampilkan `records_total` / `records_ok` / `records_failed`, periksa ini.
 5. Buka **Dashboard** → **Load demo** tidak perlu diklik; data Anda sudah masuk.
    Lihat apakah ada alert muncul.
 
@@ -171,14 +171,14 @@ atau mengimpor sambil UI menjalankan analisis ulang.
 Perbaikan: `analyze_project()` diserialisasi dengan `db_lock()` (RLock reentrant di
 `db.py`), dan `cursor()` mengambil lock yang sama sehingga transaksi tidak pernah
 bertumpang tindih. Deteksi bersifat CPU-bound dan membaca seluruh tabel event, jadi
-serialisasi memang benar — bukan sekadar jalan pintas.
+serialisasi memang benar, bukan sekadar jalan pintas.
 
-Bukti: `tools/repro_delete_race.py` — sebelum perbaikan 3/4 penghapusan konkuren
+Bukti: `tools/repro_delete_race.py`, sebelum perbaikan 3/4 penghapusan konkuren
 gagal (HTTP 500); sesudahnya 8/8 sukses, diulang 5 kali tanpa kegagalan.
 Regression test: `test_concurrent_analyze_does_not_corrupt_graph` (terbukti gagal
 bila lock dilepas).
 
-**Mengapa impor log asli sering menghasilkan 0 alert — dan itu bukan bug.**
+**Mengapa impor log asli sering menghasilkan 0 alert, dan itu bukan bug.**
 
 Log Security dan Firewall Windows pada mesin kerja normal **memang tidak memuat pola
 serangan**. Setelah mengimpor `security.json` (5000 event) + `firewall.json` (626 event)
@@ -190,7 +190,7 @@ Penyebabnya bisa diperiksa langsung:
 | Yang dibutuhkan rule | Yang ada di log |
 |---|---|
 | IOC match (R-003) | **0** event cocok. IP tujuan hanya `224.0.0.251` (mDNS multicast) dan `127.0.0.1` (loopback) |
-| Brute force (R-001) | hanya **2** `logon_failed` — R-001 butuh ≥5 dalam jendela waktu |
+| Brute force (R-001) | hanya **2** `logon_failed`, R-001 butuh ≥5 dalam jendela waktu |
 | Rantai proses (R-002) | 26 event punya `parent_process`, tapi semua pola normal (`wininit.exe → lsass.exe`, `smss.exe → csrss.exe`) |
 | Akses file + transfer (R-004) | **0** `file_path`, **0** `bytes_out` |
 | Query DNS (R-003) | **0** `domain` |
@@ -202,14 +202,14 @@ muncul seketika.
 
 **Mengapa graf tidak menunjukkan apa pun yang berbahaya.** Graf hanya menggambar node
 untuk field yang benar-benar terisi. Tanpa `user_name`, `process_name`, `domain`, atau
-`file_path`, graf tidak punya entitas untuk dihubungkan — hanya node event, alert, dan
+`file_path`, graf tidak punya entitas untuk dihubungkan, hanya node event, alert, dan
 IP. Ini konsekuensi dari prinsip produk: **tidak menggambar relasi yang tidak punya
 bukti.** Graf yang ramai tapi tanpa dasar justru pelanggaran desain.
 
 **Agar impor log nyata menghasilkan deteksi:**
 
 1. **Pasang Sysmon.** Ini yang paling menentukan. Sysmon mengisi `process_name`,
-   `parent_process`, `command_line`, `dst_ip`, `file_path` — bahan bakar R-002, R-003,
+   `parent_process`, `command_line`, `dst_ip`, `file_path`, bahan bakar R-002, R-003,
    R-004. Tanpa Sysmon, telemetri proses dan jaringan hampir kosong.
    ```
    .\tools\export-windows-logs.ps1 -Preset sysmon -Hours 24 -Out sysmon.json
@@ -219,7 +219,7 @@ bukti.** Graf yang ramai tapi tanpa dasar justru pelanggaran desain.
    dataset demo).
 3. **Perbesar jendela waktu.** `-Hours 72` atau lebih agar pola lintas jam tertangkap.
 4. **Ingat bahwa R-006 bukan indikator serangan.** Volume spike hanya berarti "banyak
-   event di jam ini" — bisa jadi Windows Update. Severity-nya `low` dan itu tepat.
+   event di jam ini", bisa jadi Windows Update. Severity-nya `low` dan itu tepat.
 
 - **Model reasoning memakan budget token untuk penalaran tersembunyi.** Sebagian model
   (mis. keluarga reasoning) menghabiskan seluruh `max_tokens` sebelum sempat menulis
@@ -241,7 +241,7 @@ bukti.** Graf yang ramai tapi tanpa dasar justru pelanggaran desain.
   menyatakan jenis aktivitasnya secara eksplisit; skrip menebak dari event ID dan isi
   pesan. Periksa hasilnya di halaman Events sebelum mempercayai alert yang muncul.
 - **Rule yang butuh kolom spesifik tidak akan menyala** bila log sumber tidak memuatnya.
-  Contoh: R-002 (rantai proses mencurigakan) butuh `parent_process` — log Windows 4688
+  Contoh: R-002 (rantai proses mencurigakan) butuh `parent_process`, log Windows 4688
   memuatnya di dalam teks pesan, bukan kolom terpisah, jadi rule ini kemungkinan besar
   tidak aktif kecuali Anda memasang Sysmon.
 - **Sysmon tidak terpasang** di mesin ini (sudah diperiksa). Tanpa Sysmon, telemetry
@@ -271,10 +271,10 @@ python tools/make_release.py                # -> release/sentinelgraph-ai
 1. menyalin hanya source + docs + `frontend/dist` + skrip, melewati `.git`, `.venv`,
    `node_modules`, `data/`, `*.db`, `*-wal`, `*-shm`, ekspor telemetri, `.env`, log;
 2. membangun DB demo dari dataset **sintetis** lewat jalur bootstrap biasa
-   (`sentinelgraph init` + `load-demo`) di direktori **scratch** — DB runtime tidak
+   (`sentinelgraph init` + `load-demo`) di direktori **scratch**, DB runtime tidak
    pernah ikut ke paket;
 3. menjalankan `tools/check_pii_db.py` terhadap DB scratch itu; **exit != 0 jika ada match**;
-4. mengekspor dataset sintetis ke `data/demo/demo-events.jsonl` — itu yang dikirim,
+4. mengekspor dataset sintetis ke `data/demo/demo-events.jsonl`, itu yang dikirim,
    bukan database.
 
 ### Deteksi PII (`tools/check_pii_db.py`)

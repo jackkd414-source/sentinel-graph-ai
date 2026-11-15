@@ -1,4 +1,4 @@
-# Testing — cara menjalankan dan apa artinya
+# Testing, cara menjalankan dan apa artinya
 
 ## Perintah kanonik
 
@@ -26,7 +26,7 @@ Mencakup: ingest/normalisasi, rule engine R-001..R-006, korelasi, graph, evidenc
 reporting, provider adapter (mock), SSRF, upload, auth/deployment.
 
 Status terkini (2026-11-14): **311 passed, 1 warning** (`python -m pytest`). Satu warning
-berasal dari `starlette.testclient` (httpx deprecated) — bukan kegagalan. Suite ini juga
+berasal dari `starlette.testclient` (httpx deprecated), bukan kegagalan. Suite ini juga
 memuat `test_ci_config.py`, yang memverifikasi `.github/workflows/verify.yml`; workflow
 tersebut ikut dikemas di rilis (hanya file itu, bukan seluruh `.github`) agar test ini
 lulus juga di dalam bundle (311/311).

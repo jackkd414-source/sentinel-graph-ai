@@ -39,7 +39,7 @@ export function EvidenceRepository({ onImport, reloadKey }: { onImport: () => vo
     run: async () => {
       setBusy(true); setNotice(null);
       const r = await api.deleteArtifact(a.id);
-      setNotice(`Deleted “${r.deleted_artifact}” — ${r.events_removed} event(s) removed, derived data rebuilt.`);
+      setNotice(`Deleted “${r.deleted_artifact}”, ${r.events_removed} event(s) removed, derived data rebuilt.`);
       setSelected(null);
       await load();
       setBusy(false);
@@ -75,7 +75,7 @@ export function EvidenceRepository({ onImport, reloadKey }: { onImport: () => vo
     { key: "size", header: "Size", width: 90, align: "right", render: (a) => <span className="mono num">{fmtBytes(a.size_bytes)}</span> },
     { key: "imported", header: "Imported", width: 160, render: (a) => <span className="mono num">{fmtTime(a.imported_at)}</span> },
     { key: "sha", header: "SHA-256", width: 120, render: (a) => (
-      <span className="mono faint" title={a.sha256 || ""}>{(a.sha256 || "—").slice(0, 14)}…</span>) },
+      <span className="mono faint" title={a.sha256 || ""}>{(a.sha256 || "-").slice(0, 14)}…</span>) },
   ];
 
   return (
@@ -151,7 +151,7 @@ export function EvidenceRepository({ onImport, reloadKey }: { onImport: () => vo
               <dt>Records</dt><dd className="mono">{selected.record_ok} ok / {selected.record_failed} rejected / {selected.record_total} total</dd>
               <dt>Size</dt><dd className="mono">{fmtBytes(selected.size_bytes)}</dd>
               <dt>Imported</dt><dd className="mono">{fmtTime(selected.imported_at)}</dd>
-              <dt>Stored path</dt><dd className="mono" style={{ wordBreak: "break-all" }}>{selected.stored_path || "—"}</dd>
+              <dt>Stored path</dt><dd className="mono" style={{ wordBreak: "break-all" }}>{selected.stored_path || "-"}</dd>
             </dl>
             <div style={{ marginTop: 16 }}>
               <div className="tw-section-title">SHA-256</div>

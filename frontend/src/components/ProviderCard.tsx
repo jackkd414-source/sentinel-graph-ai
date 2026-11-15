@@ -1,4 +1,4 @@
-// TRACEWORK ProviderCard — one AI provider configuration, presented as system
+// TRACEWORK ProviderCard, one AI provider configuration, presented as system
 // configuration (not a chat surface). Credentials are always masked.
 
 import type { ProviderConfig, TestResult } from "../api";
@@ -47,7 +47,7 @@ export function ProviderCard({
         <div className="tw-provider-grid">
           <Field label="Endpoint" value={config.base_url || "(provider default)"} mono />
           <Field label="Model ID" value={config.model_id} mono />
-          <Field label="Fast model" value={config.fast_model_id || "—"} mono />
+          <Field label="Fast model" value={config.fast_model_id || "-"} mono />
           <Field label="Credential" mono
                  value={config.credential_configured
                    ? `${config.credential_hint} (${config.secret_source})`
@@ -56,7 +56,7 @@ export function ProviderCard({
           <Field label="Max output" value={config.max_output_tokens ? `${config.max_output_tokens} tokens` : "provider default"} />
           <Field label="Connection" value={config.last_test_status || "never tested"} />
           <Field label="Last tested" value={config.last_test_at ? fmtTime(config.last_test_at) : "never"} />
-          <Field label="Latency" value={config.last_test_latency_ms != null ? `${config.last_test_latency_ms} ms` : "—"} />
+          <Field label="Latency" value={config.last_test_latency_ms != null ? `${config.last_test_latency_ms} ms` : "-"} />
         </div>
 
         {config.last_test_error ? (
@@ -67,7 +67,7 @@ export function ProviderCard({
           <div className={`tw-banner ${result.ok ? "tw-banner-ok" : "tw-banner-err"}`} style={{ marginTop: 12 }}>
             <span>
               <strong>{result.ok ? "Connection OK" : "Connection failed"}</strong>
-              {" — "}{result.provider}/{result.model} · {result.latency_ms}ms
+              {", "}{result.provider}/{result.model} · {result.latency_ms}ms
               {result.error_category ? ` · ${result.error_category}` : ""}
               {result.error_message ? `: ${result.error_message}` : ""}
               {result.ok && result.sample_reply ? ` · reply: “${result.sample_reply}”` : ""}

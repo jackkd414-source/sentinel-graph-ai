@@ -1,10 +1,10 @@
-# TRACEWORK — SentinelGraph AI design system
+# TRACEWORK, SentinelGraph AI design system
 
 > *An investigation workstation built around evidence, relationships, and clarity.*
 
 TRACEWORK is the interface language of SentinelGraph AI. It exists so the product
 reads as a serious forensic tool: precise, quiet, readable, and engineered with
-intention — not a generic dashboard.
+intention, not a generic dashboard.
 
 ## 1. Principles
 
@@ -14,7 +14,7 @@ intention — not a generic dashboard.
 3. **Facts vs. hypotheses.** Observed relationships are solid; inferred ones are
    dashed and explicitly marked "needs verification".
 4. **Readability over decoration.** Whitespace, alignment, separators and type
-   hierarchy do the work — not cards, glows or gradients.
+   hierarchy do the work, not cards, glows or gradients.
 5. **Quiet severity.** Severity is a muted colour *plus* a word; never colour alone.
 
 ## 2. Tokens
@@ -55,28 +55,28 @@ timestamps, file paths and raw records.
 
 `components/` is the only place UI is styled. Pages compose, never re-invent.
 
-- `icons.tsx` — hand-drawn geometric stroke set + brand mark (no icon dependency).
-- `ui.tsx` — `SeverityIndicator`, `StatusIndicator`, `EntityTypeIndicator`,
+- `icons.tsx`, hand-drawn geometric stroke set + brand mark (no icon dependency).
+- `ui.tsx`, `SeverityIndicator`, `StatusIndicator`, `EntityTypeIndicator`,
   `EvidenceReference`, `SourceLabel`, `Timestamp`, `EmptyState`, `LoadingState`,
   `ErrorState`, `Notification`, `ConfirmDialog`, `Tooltip`, `FormField`, `SearchInput`,
   and the `fmtTime`/`fmtBytes` helpers.
-- `layout.tsx` — `AppShell`, `Sidebar`, `Topbar`, `Breadcrumbs`, `PageHeader`.
-- `data.tsx` — `DataTable`, `TableToolbar`, `FilterBar`, `Tabs`, `MetricStrip`/`MetricItem`,
+- `layout.tsx`, `AppShell`, `Sidebar`, `Topbar`, `Breadcrumbs`, `PageHeader`.
+- `data.tsx`, `DataTable`, `TableToolbar`, `FilterBar`, `Tabs`, `MetricStrip`/`MetricItem`,
   `PanelHeader`, `InspectorPanel`, `Timeline`.
-- `GraphCanvas.tsx` — the attack-graph surface (raw SVG, fit-to-view, pan/zoom, legend,
+- `GraphCanvas.tsx`, the attack-graph surface (raw SVG, fit-to-view, pan/zoom, legend,
   observed vs inferred edges, entity shapes).
-- `NodeInspector.tsx` — shared node detail used by both graph surfaces.
-- `ProviderCard.tsx` — one AI provider configuration.
+- `NodeInspector.tsx`, shared node detail used by both graph surfaces.
+- `ProviderCard.tsx`, one AI provider configuration.
 
 ## 5. Non-negotiables
 
 - No gradients, glassmorphism, neon, glow, or cyberpunk styling.
 - No emoji as icons; no decorative charts without data; no fake statistics.
-- No placeholder buttons — every control performs a real action.
+- No placeholder buttons, every control performs a real action.
 - Light theme only; raw records use a light sunken surface, not a dark block.
 - `prefers-reduced-motion` is respected.
 
-## Skin 2 — adopted from the operator's reference (2026-11-15)
+## Skin 2, adopted from the operator's reference (2026-11-15)
 
 The product owner supplied two reference screenshots and chose to adopt their
 language across the whole app, superseding the "no cards / no charts" guidance
@@ -91,7 +91,7 @@ of the original brief:
   hairline border; the metric strip is a card as well.
 - **Widgets.** `Donut` (detection posture), `Stats`/`Stat` (big numbers),
   `Callout` (evidence-reference banner), `ChipTimeline` (time + coloured dot +
-  inline type chip), `OkChip` (status pills) — all in `components/widgets.tsx`.
+  inline type chip), `OkChip` (status pills), all in `components/widgets.tsx`.
 - **Attack graph.** The graph keeps its raw-SVG canvas and gains a right-hand
   `Relationships` rail listing every edge as Time / Source / Destination with
   the relation and how many events prove it.
@@ -99,23 +99,24 @@ of the original brief:
 Tokens for this layer live at the end of `tokens.css`; the overrides are the
 `SKIN 2` sections of `base.css`, `components.css` and `pages.css`.
 
-## Dashboard onboarding (self-teaching — no manual required)
+## Onboarding: the Tutorial tab, not the dashboard
 
-The dashboard teaches the workflow in place, so a first-time analyst never has
-to open the docs or the source:
+An earlier iteration put a workflow guide on the dashboard. It was removed: it
+duplicated the Tutorial tab and pushed the live numbers below the fold. The
+dashboard now opens straight onto the metrics and the incident table.
 
-- **Start here / Where to go next** (`components/guide.tsx`): a state-aware
-  panel. Empty workspace -> "Start here" with the four stages plus a *Load demo
-  dataset* action. Data present -> "Where to go next" with a concrete next step
-  (`Next step: open INC-0001 ...` and an Investigate button).
-- **Workflow strip**: four clickable stage cards (Bring evidence in -> See what
-  fired -> Investigate -> Write it up), each showing a live count from the real
-  workspace and navigating to the matching screen.
-- **What the words mean**: a plain-language glossary (Event, Alert, Incident,
-  Evidence, AI) inside the guide, plus the standing rule that facts and
-  hypotheses are always shown apart.
-- Dismissible, and restorable via the *How this works* button in the page header
-  (state in `localStorage: sg.guide.hidden`).
+Everything a first-time analyst needs lives in one place, the **Tutorial** tab
+(sidebar group *Learn*, `pages/TutorialPage.tsx`):
+
+- Nine numbered steps covering the whole loop, each with a button that opens the
+  screen it describes.
+- A jump-link row at the top, so the page doubles as an index.
+- A closing **What the words mean** glossary (Event, Alert, Incident, Evidence,
+  AI) plus the standing rule that facts and hypotheses are always shown apart.
+
+The dashboard keeps only what is live: counts, incidents, detection posture,
+system status and recent detections. Every panel that can be empty carries its
+own empty state, so an unloaded workspace still explains itself.
 
 ## Tutorial tab + bilingual UI (EN / ID)
 

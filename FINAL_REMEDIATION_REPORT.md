@@ -1,4 +1,4 @@
-# FINAL REMEDIATION REPORT — SentinelGraph AI
+# FINAL REMEDIATION REPORT, SentinelGraph AI
 
 Tanggal: 2026-11-14
 Lingkungan: Windows 10, Python 3.11.0, Node/Vite, SQLite (raw SQL, tanpa ORM)
@@ -28,23 +28,23 @@ keluaran yang mendukung dicantumkan apa adanya. Tidak ada klaim tanpa bukti.
 ## 2. File yang diubah
 
 Backend
-- `backend/sentinelgraph/api.py` — CORS `Authorization`, bypass OPTIONS, `_ensure_default_project` atomik, pemasangan `BodyLimitMiddleware`
-- `backend/sentinelgraph/security.py` — NAT64/6to4/Teredo, validasi seluruh embedded IPv4, penolakan prefix transisi
-- `backend/sentinelgraph/config.py` — `SG_MAX_REQUEST_BYTES` (default `max_upload_bytes + 64 KiB`)
-- `backend/sentinelgraph/bodylimit.py` (baru) — middleware batas body ASGI
+- `backend/sentinelgraph/api.py`, CORS `Authorization`, bypass OPTIONS, `_ensure_default_project` atomik, pemasangan `BodyLimitMiddleware`
+- `backend/sentinelgraph/security.py`, NAT64/6to4/Teredo, validasi seluruh embedded IPv4, penolakan prefix transisi
+- `backend/sentinelgraph/config.py`, `SG_MAX_REQUEST_BYTES` (default `max_upload_bytes + 64 KiB`)
+- `backend/sentinelgraph/bodylimit.py` (baru), middleware batas body ASGI
 
 Frontend
-- `frontend/src/auth.ts` (baru) — token store session-scoped (sessionStorage + fallback memori)
-- `frontend/src/api.ts` — header `Authorization`, `authFetch`, `downloadReport`, event 401
-- `frontend/src/App.tsx` — tombol Token/Sign out, panel input password, reaksi 401
-- `frontend/src/pages/ProvidersPage.tsx` — fetch mentah diganti `authFetch`
-- `frontend/src/pages/IncidentView.tsx` — unduhan laporan lewat fetch ber-token (bukan `<a href>`)
+- `frontend/src/auth.ts` (baru), token store session-scoped (sessionStorage + fallback memori)
+- `frontend/src/api.ts`, header `Authorization`, `authFetch`, `downloadReport`, event 401
+- `frontend/src/App.tsx`, tombol Token/Sign out, panel input password, reaksi 401
+- `frontend/src/pages/ProvidersPage.tsx`, fetch mentah diganti `authFetch`
+- `frontend/src/pages/IncidentView.tsx`, unduhan laporan lewat fetch ber-token (bukan `<a href>`)
 
 Tools & test
-- `tools/make_release.py` — allowlist, penolakan arsip/kredensial, scan PII teks+demo+screenshot, ZIP + verifikasi arsip
-- `tools/check_pii_db.py` — dipakai sebagai gate DB (tidak diubah)
+- `tools/make_release.py`, allowlist, penolakan arsip/kredensial, scan PII teks+demo+screenshot, ZIP + verifikasi arsip
+- `tools/check_pii_db.py`, dipakai sebagai gate DB (tidak diubah)
 - `backend/tests/test_auth.py` (baru), `test_concurrency.py` (baru), `test_ssrf_hardening.py` (baru), `test_bodylimit.py` (baru)
-- `backend/tests/test_security.py` — test DNS publik diganti mock deterministik
+- `backend/tests/test_security.py`, test DNS publik diganti mock deterministik
 - `docs/SECURITY.md`, `docs/TESTING.md`, `docs/DATA_MANAGEMENT.md`, `docs/PROPOSAL.md`, `docs/SLIDES.md`, `README.md`, `tools/export-windows-logs.ps1`
 
 ---
@@ -64,7 +64,7 @@ Tools & test
 - Default tetap localhost-only tanpa token; `enforce_secure_binding` tetap
   menolak bind non-loopback tanpa `SG_AUTH_TOKEN`.
 
-Bukti: `backend/tests/test_auth.py` — 18 test lulus, termasuk 7 endpoint sensitif
+Bukti: `backend/tests/test_auth.py`, 18 test lulus, termasuk 7 endpoint sensitif
 yang diuji tanpa token (semua 401) dan 4 pemeriksaan preflight CORS.
 
 ---
@@ -114,7 +114,7 @@ menolak request bila host berubah setelah validasi (indikasi rebinding).
 `open_pinned_client` selalu `follow_redirects=False`.
 
 Bukti: `backend/tests/test_security.py` + `backend/tests/test_ssrf_hardening.py`
-— 66 test lulus, termasuk satu request HTTP nyata ke server localhost yang
+- 66 test lulus, termasuk satu request HTTP nyata ke server localhost yang
 dijalankan test sendiri.
 
 ---
@@ -129,7 +129,7 @@ dijalankan test sendiri.
   saat melewati batas; parser tidak pernah menyelesaikan pembacaan.
 - File tepat sebesar batas payload tetap diterima (overhead multipart diserap slack).
 
-Bukti: `backend/tests/test_bodylimit.py` — 5 test lulus (JSON over limit,
+Bukti: `backend/tests/test_bodylimit.py`, 5 test lulus (JSON over limit,
 multipart over limit, chunked bypass, request normal, batas dibaca saat runtime),
 plus `backend/tests/test_upload_limits.py` tetap hijau (9 test).
 
@@ -226,8 +226,8 @@ arsip lama, telemetry, atau `.env`.
 
 Dua pengecualian pemindaian bersifat eksplisit dan auditabel di source
 (`PII-SCAN-ALLOW`), bukan blind-ignore:
-- `docs/DATA_MANAGEMENT.md` — mendokumentasikan pola scanner itu sendiri.
-- `tools/export-windows-logs.ps1` — contoh placeholder `DESKTOP-EXAMPLE`.
+- `docs/DATA_MANAGEMENT.md`, mendokumentasikan pola scanner itu sendiri.
+- `tools/export-windows-logs.ps1`, contoh placeholder `DESKTOP-EXAMPLE`.
 
 ---
 
@@ -241,7 +241,7 @@ Dua pengecualian pemindaian bersifat eksplisit dan auditabel di source
    hanya mencakup nama file dan sidecar `.txt`; piksel tidak dipindai.
 3. **Integrasi provider AI live tidak diuji** dalam sesi ini (tanpa kredensial
    nyata). Seluruh test AI memakai stub/permintaan yang dimock.
-4. **Belum ada RBAC/sesi per pengguna** — satu token bersama tetap menjadi model
+4. **Belum ada RBAC/sesi per pengguna**, satu token bersama tetap menjadi model
    autentikasinya.
 
 ---

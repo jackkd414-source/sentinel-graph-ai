@@ -9,6 +9,13 @@ import { Icons } from "../components/icons";
 
 const PAGE = 50;
 
+/** Plain-language reason for each degraded-timestamp status, shown in the UI. */
+const TS_WHY: Record<string, string> = {
+  assumed: "the record carried no timezone, so a default was applied. The instant may be off by hours.",
+  invalid: "a timestamp was present but could not be parsed, so no instant is stored for it.",
+  missing: "the record had no timestamp field at all.",
+};
+
 export function EventsExplorer({
   initialQuery = "", onOpenGraphForEvent,
 }: { initialQuery?: string; onOpenGraphForEvent?: (eventId: number) => void }) {
@@ -69,13 +76,13 @@ export function EventsExplorer({
     { key: "ts", header: "Timestamp", width: 172, render: (e) => <Timestamp status={e.ts_status} raw={e.ts_utc || e.ts_raw} /> },
     { key: "type", header: "Event type", width: 150, render: (e) => <span className="mono">{e.event_type}</span> },
     { key: "sev", header: "Severity", width: 96, render: (e) => e.severity
-      ? <SeverityIndicator severity={e.severity} /> : <span className="faint">—</span> },
+      ? <SeverityIndicator severity={e.severity} /> : <span className="faint">-</span> },
     { key: "src", header: "Source", width: 130, render: (e) => <SourceLabel>{e.source}</SourceLabel> },
-    { key: "host", header: "Host", width: 130, render: (e) => <span className="mono">{e.host || "—"}</span> },
-    { key: "user", header: "User", width: 118, render: (e) => <span className="mono">{e.user_name || "—"}</span> },
+    { key: "host", header: "Host", width: 130, render: (e) => <span className="mono">{e.host || "-"}</span> },
+    { key: "user", header: "User", width: 118, render: (e) => <span className="mono">{e.user_name || "-"}</span> },
     { key: "desc", header: "Description", render: (e) => (
       <span className="mono truncate" style={{ display: "block", maxWidth: 360 }}>
-        {e.command_line || e.file_path || e.domain || e.process_name || e.action || e.dst_ip || "—"}
+        {e.command_line || e.file_path || e.domain || e.process_name || e.action || e.dst_ip || "-"}
       </span>) },
   ];
 
@@ -85,11 +92,18 @@ export function EventsExplorer({
 
       {totalIssues > 0 ? (
         <div className="tw-banner tw-banner-warn" style={{ marginBottom: 16 }}>
-          <span>
-            <strong>{totalIssues} event(s) have degraded timestamps.</strong> They are kept (dropping
-            them would lose evidence) but flagged as {facets?.timestamp_issues.map((t) => `${t.ts_status} (${t.c})`).join(", ")}.
-            Unparseable timestamps are never replaced with a guessed value.
-          </span>
+          <div>
+            <strong>{totalIssues} event(s) have degraded timestamps.</strong>{" "}
+            They are kept, because dropping them would lose evidence, but their place on the timeline is not certain. Unparseable timestamps are never replaced with a guessed value.
+            <ul className="tw-ts-why">
+              {facets?.timestamp_issues.map((t) => (
+                <li key={t.ts_status}>
+                  <span className="mono">{t.ts_status} ({t.c})</span>{" "}
+                  {TS_WHY[t.ts_status] ?? "unknown status."}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       ) : null}
 
@@ -133,7 +147,7 @@ export function EventsExplorer({
           <span className="tw-panel-title">Normalized events</span>
           <span className="spacer" />
           <span className="mono faint">
-            {total === 0 ? "0" : `${offset + 1}–${Math.min(offset + PAGE, total)} of ${total}`}
+            {total === 0 ? "0" : `${offset + 1}-${Math.min(offset + PAGE, total)} of ${total}`}
           </span>
         </div>
         {loading && rows.length === 0 ? <LoadingState label="Loading events…" /> : (
@@ -179,15 +193,15 @@ export function EventsExplorer({
             <dl className="tw-kv" style={{ marginBottom: 16 }}>
               <dt>Timestamp</dt><dd><Timestamp status={selected.ts_status} raw={selected.ts_utc || selected.ts_raw} /></dd>
               <dt>Event type</dt><dd className="mono">{selected.event_type}</dd>
-              <dt>Severity</dt><dd>{selected.severity ? <SeverityIndicator severity={selected.severity} /> : "—"}</dd>
+              <dt>Severity</dt><dd>{selected.severity ? <SeverityIndicator severity={selected.severity} /> : "-"}</dd>
               <dt>Source</dt><dd><SourceLabel>{selected.source}</SourceLabel></dd>
-              <dt>Host</dt><dd className="mono">{selected.host || "—"}</dd>
-              <dt>User</dt><dd className="mono">{selected.user_name || "—"}</dd>
-              <dt>Process</dt><dd className="mono">{selected.process_name || "—"}</dd>
-              <dt>Destination</dt><dd className="mono">{selected.dst_ip || "—"}{selected.dst_port ? `:${selected.dst_port}` : ""}</dd>
-              <dt>Domain</dt><dd className="mono">{selected.domain || "—"}</dd>
-              <dt>File</dt><dd className="mono" style={{ wordBreak: "break-all" }}>{selected.file_path || "—"}</dd>
-              <dt>Hash</dt><dd className="mono" style={{ wordBreak: "break-all" }}>{selected.file_hash || "—"}</dd>
+              <dt>Host</dt><dd className="mono">{selected.host || "-"}</dd>
+              <dt>User</dt><dd className="mono">{selected.user_name || "-"}</dd>
+              <dt>Process</dt><dd className="mono">{selected.process_name || "-"}</dd>
+              <dt>Destination</dt><dd className="mono">{selected.dst_ip || "-"}{selected.dst_port ? `:${selected.dst_port}` : ""}</dd>
+              <dt>Domain</dt><dd className="mono">{selected.domain || "-"}</dd>
+              <dt>File</dt><dd className="mono" style={{ wordBreak: "break-all" }}>{selected.file_path || "-"}</dd>
+              <dt>Hash</dt><dd className="mono" style={{ wordBreak: "break-all" }}>{selected.file_hash || "-"}</dd>
               <dt>Bytes out</dt><dd className="mono">{fmtBytes(selected.bytes_out)}</dd>
             </dl>
             <div className="tw-section-title">Raw record (as stored)</div>

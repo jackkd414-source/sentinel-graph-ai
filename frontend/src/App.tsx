@@ -142,7 +142,7 @@ export function App() {
             {health?.status === "ok" ? "System Healthy" : "Backend unreachable"}
           </span>
           <LangSwitch />
-          <span className="mono">v{health?.version || "—"}</span>
+          <span className="mono">v{health?.version || "-"}</span>
         </>
       }
     />
@@ -189,7 +189,7 @@ export function App() {
       ) : route === "dashboard" ? (
         <div className="tw-content">
           <Dashboard onOpenIncident={openIncident} onLoadDemo={loadDemo} demoBusy={demoBusy}
-                     reloadKey={reloadKey} onNavigate={setRoute} />
+                     reloadKey={reloadKey} />
         </div>
       ) : route === "incidents" ? (
         <div className="tw-content"><IncidentsList onOpen={openIncident} /></div>

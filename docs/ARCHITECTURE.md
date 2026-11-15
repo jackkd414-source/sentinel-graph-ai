@@ -32,21 +32,21 @@ menyembunyikan hasilnya di memori saja.
 
 | Tabel | Isi | Kunci bukti |
 |---|---|---|
-| `projects` | Workspace | — |
+| `projects` | Workspace |, |
 | `artifacts` | File yang diimpor + SHA-256 | `sha256` |
 | `events` | Event ternormalisasi | `raw` (payload asli disimpan) |
-| `iocs` | Indikator ancaman lokal | — |
+| `iocs` | Indikator ancaman lokal |, |
 | `alerts` | Temuan rule engine | `rule_id`, narasi |
 | `alert_events` | Alert → event | **Setiap alert wajib punya baris di sini** |
 | `graph_nodes` | Entitas (host, user, proses, file, domain, IP) | `node_key` |
 | `graph_edges` | Relasi antar entitas | `status` (`observed` / `inferred`) |
 | `edge_events` | Edge → event | **Setiap edge `observed` wajib punya baris di sini** |
-| `incidents` | Pengelompokan alert | — |
-| `incident_alerts` | Insiden → alert | — |
+| `incidents` | Pengelompokan alert |, |
+| `incident_alerts` | Insiden → alert |, |
 | `reports` | Laporan yang digenerate | `content` |
 | `ai_runs` | Riwayat pemanggilan AI | `request_context` (manifest) |
 | `ai_run_evidence` | AI run → event yang dikutip | **Hanya ID yang lolos verifikasi** |
-| `audit_log` | Jejak aksi | — |
+| `audit_log` | Jejak aksi |, |
 
 ### Mengapa `alert_events` dan `edge_events` dipisah
 
@@ -82,15 +82,15 @@ Contoh narasi R-004 (dipangkas):
 > Host 'WS-FIN-07' accessed sensitive path 'C:\...\Q4_forecast_confidential.xlsx' at
 > 2026-11-03T08:25:00Z, then sent 14,782,464 bytes to 203.0.113.66 at 2026-11-03T08:31:00Z
 > (360s later). **Both events are observed facts. Whether data left the network is NOT
-> established by these events alone** — the transfer may be unrelated or legitimate.
+> established by these events alone**, the transfer may be unrelated or legitimate.
 
 ## 4. Attack graph
 
 ### Status edge
 
-- `observed` — relasi tercatat langsung di event (mis. `process_create` memberi
+- `observed`, relasi tercatat langsung di event (mis. `process_create` memberi
   `host --spawned--> process`). **Wajib** punya `edge_events`.
-- `inferred` — relasi diturunkan dari pola (mis. akun muncul di event non-logon pada
+- `inferred`, relasi diturunkan dari pola (mis. akun muncul di event non-logon pada
   host → `active_on` dengan confidence `low`). Tidak mengklaim fakta langsung.
 
 Setiap edge menyertakan `method` yang menjelaskan cara penurunannya, sehingga analis
@@ -143,11 +143,11 @@ Yang dipercaya:
 4. **Memvalidasi skema.** Bila gagal → `validation_failed`, tidak ada yang disimpan.
 5. **Menyaring setiap sitasi** `supporting_event_ids` / `contradicting_event_ids`:
    hanya integer asli yang ada di manifest yang dipertahankan. `int(1.5)` **tidak**
-   diterima, karena akan diam-diam menjadi `1` — ID event yang berbeda.
+   diterima, karena akan diam-diam menjadi `1`, ID event yang berbeda.
 6. **Menandai setiap hipotesis:**
-   - `supported` — punya ≥1 sitasi valid, tanpa kontradiksi
-   - `contested` — punya sitasi valid dan sitasi kontradiktif
-   - `unsupported` — semua sitasi dibuang
+   - `supported`, punya ≥1 sitasi valid, tanpa kontradiksi
+   - `contested`, punya sitasi valid dan sitasi kontradiktif
+   - `unsupported`, semua sitasi dibuang
 7. **Menghitung `stripped_reference_count`** agar jumlah kebohongan yang tertangkap
    terlihat, bukan tersembunyi.
 8. Menyimpan hasil ke `ai_runs`, dan hanya ID yang lolos ke `ai_run_evidence`.

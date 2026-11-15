@@ -12,7 +12,7 @@
  *  - MutationObserver callbacks are microtasks: they run before the browser
  *    paints, so a React re-render never flashes English before we translate.
  *  - Switching language remounts the app (see main.tsx), so English is restored
- *    by React itself — we never need to "un-translate" anything.
+ *    by React itself, we never need to "un-translate" anything.
  */
 import {
   createContext, useCallback, useContext, useEffect, useState, type ReactNode,
@@ -143,33 +143,8 @@ const ID: Record<string, string> = {
   "Total alerts": "Total peringatan",
 
   // ---- dashboard guide ---------------------------------------------------
-  "Start here": "Mulai dari sini",
-  "Where to go next": "Langkah selanjutnya",
-  "Bring evidence in": "Masukkan bukti",
-  "See what fired": "Lihat apa yang terpicu",
-  "Write it up": "Susun laporan",
-  "No data yet.": "Belum ada data.",
-  "Next step:": "Langkah berikutnya:",
-  "Nothing is waiting on you.": "Tidak ada yang menunggu Anda.",
   "Go to Imports": "Buka Impor",
   "What the words mean": "Arti istilah",
-  "How this works": "Cara kerja",
-  "Hide this guide (bring it back from Settings)":
-    "Sembunyikan panduan ini (bisa dibuka lagi dari Pengaturan)",
-  "SentinelGraph turns raw telemetry into an investigation you can defend. Four stages, in order:":
-    "SentinelGraph mengubah telemetri mentah menjadi investigasi yang bisa Anda pertanggungjawabkan. Empat tahap, berurutan:",
-  "You have evidence loaded. Each card below is one stage of the investigation — click any of them.":
-    "Bukti sudah dimuat. Setiap kartu di bawah adalah satu tahap investigasi — klik salah satunya.",
-  "Import Sysmon / log exports, or load the synthetic demo set. Nothing is analysed until it is stored.":
-    "Impor ekspor Sysmon / log, atau muat dataset demo sintetis. Tidak ada yang dianalisis sebelum tersimpan.",
-  "Deterministic rules scan the stored events. A hit is a lead with cited evidence — not a verdict.":
-    "Aturan deterministik memindai peristiwa tersimpan. Temuan adalah petunjuk dengan bukti yang dikutip — bukan vonis.",
-  "Alerts that share a host or account become one incident, with a timeline and an attack graph.":
-    "Peringatan yang berbagi host atau akun menjadi satu insiden, lengkap dengan linimasa dan graf serangan.",
-  "Generate a report where every claim cites stored events. Facts and guesses stay separated.":
-    "Buat laporan di mana setiap klaim mengutip peristiwa tersimpan. Fakta dan dugaan tetap dipisahkan.",
-  "The demo dataset is synthetic and clearly labelled — it is the fastest way to see the whole pipeline working.":
-    "Dataset demo bersifat sintetis dan diberi label jelas — cara tercepat melihat seluruh alur bekerja.",
   "Event": "Peristiwa",
   "Alert": "Peringatan",
   "Incident": "Insiden",
@@ -182,15 +157,15 @@ const ID: Record<string, string> = {
     "Peringatan dengan host atau akun sama, digabung agar Anda menginvestigasi sekali, bukan sepuluh kali.",
   "The stored events behind a claim. Open any finding and you land on them.":
     "Peristiwa tersimpan di balik sebuah klaim. Buka temuan mana pun dan Anda akan sampai ke sana.",
-  "Helps read and write up. It never decides what is true — the evidence does.":
-    "Membantu membaca dan menyusun laporan. AI tidak pernah memutuskan yang benar — bukti yang memutuskan.",
+  "Helps read and write up. It never decides what is true, the evidence does.":
+    "Membantu membaca dan menyusun laporan. AI tidak pernah memutuskan yang benar, bukti yang memutuskan.",
   "Facts and hypotheses are always kept visually apart: what was observed is marked separately from what is inferred.":
     "Fakta dan hipotesis selalu dipisahkan secara visual: yang teramati ditandai berbeda dari yang disimpulkan.",
 
   // ---- tutorial ----------------------------------------------------------
   "How to use SentinelGraph": "Cara menggunakan SentinelGraph",
-  "A guided tour of the whole workflow — no manual needed. Work through it top to bottom, or jump to a step.":
-    "Panduan seluruh alur kerja — tanpa perlu manual. Ikuti dari atas ke bawah, atau langsung ke langkah tertentu.",
+  "A guided tour of the whole workflow, no manual needed. Work through it top to bottom, or jump to a step.":
+    "Panduan seluruh alur kerja, tanpa perlu manual. Ikuti dari atas ke bawah, atau langsung ke langkah tertentu.",
   "Step": "Langkah",
   "Open the app": "Buka aplikasi",
   "Get data in": "Masukkan data",
@@ -205,11 +180,10 @@ const ID: Record<string, string> = {
   "Go to Detection Rules": "Buka Aturan Deteksi",
   "Go to Attack Graph": "Buka Graf Serangan",
   "Go to Reports": "Buka Laporan",
-  "Go to Settings": "Buka Pengaturan",
   "Go to AI Providers": "Buka Penyedia AI",
   "Open Incidents": "Buka Insiden",
-  "The workspace opens on the Dashboard. Every number there is live — it reflects the database, not a mock.":
-    "Ruang kerja terbuka di Dasbor. Setiap angka di sana bersifat langsung — mencerminkan basis data, bukan data palsu.",
+  "The workspace opens on the Dashboard. Every number there is live, it reflects the database, not a mock.":
+    "Ruang kerja terbuka di Dasbor. Setiap angka di sana bersifat langsung, mencerminkan basis data, bukan data palsu.",
   "Nothing works without data, so this is always the first step.":
     "Tidak ada yang berjalan tanpa data, jadi ini selalu langkah pertama.",
   "Load the demo dataset from the Dashboard, or import your own Sysmon / JSON / CSV export under Imports.":
@@ -222,14 +196,14 @@ const ID: Record<string, string> = {
     "Buka Aturan Deteksi dan baca apa yang terpicu.",
   "Each alert cites the exact events that triggered it. A detection is a lead to check, never a conclusion.":
     "Setiap peringatan mengutip peristiwa persis yang memicunya. Deteksi adalah petunjuk untuk diperiksa, bukan kesimpulan.",
-  "You can toggle a rule off and the whole pipeline re-runs — useful to see what one rule contributes.":
-    "Anda bisa mematikan sebuah aturan dan seluruh alur dijalankan ulang — berguna untuk melihat kontribusi satu aturan.",
+  "You can toggle a rule off and the whole pipeline re-runs, useful to see what one rule contributes.":
+    "Anda bisa mematikan sebuah aturan dan seluruh alur dijalankan ulang, berguna untuk melihat kontribusi satu aturan.",
   "Alerts that share a host or account are already grouped into one incident. Open the one that matters.":
     "Peringatan yang berbagi host atau akun sudah dikelompokkan menjadi satu insiden. Buka yang paling penting.",
   "Inside an incident you get the summary, the timeline, the findings and the linked evidence in one place.":
     "Di dalam insiden Anda mendapat ringkasan, linimasa, temuan, dan bukti tertaut dalam satu tempat.",
-  "Mark it as investigating or closed as you work. Status is yours to set — the tool does not guess it.":
-    "Tandai sebagai sedang diinvestigasi atau selesai saat Anda bekerja. Status Anda yang menentukan — alat tidak menebak.",
+  "Mark it as investigating or closed as you work. Status is yours to set, the tool does not guess it.":
+    "Tandai sebagai sedang diinvestigasi atau selesai saat Anda bekerja. Status Anda yang menentukan, alat tidak menebak.",
   "The graph shows how entities relate, derived from the events themselves.":
     "Graf menunjukkan hubungan antar entitas, diturunkan dari peristiwa itu sendiri.",
   "Solid edges are observed relationships; dashed edges are inferred. Hover or click a node for detail.":
@@ -238,8 +212,8 @@ const ID: Record<string, string> = {
     "Mulai dari lingkup insiden dan beralih ke graf global bila ingin gambaran lebih luas.",
   "Open Evidence Repository to see the exact stored records behind any claim.":
     "Buka Repositori Bukti untuk melihat catatan persis yang tersimpan di balik setiap klaim.",
-  "The raw record is shown as stored — nothing is paraphrased, so you can verify by hand.":
-    "Catatan mentah ditampilkan apa adanya — tidak ada parafrase, sehingga Anda bisa memverifikasi manual.",
+  "The raw record is shown as stored, nothing is paraphrased, so you can verify by hand.":
+    "Catatan mentah ditampilkan apa adanya, tidak ada parafrase, sehingga Anda bisa memverifikasi manual.",
   "If a citation points at an event that is missing, the report says so instead of hiding it.":
     "Jika sebuah kutipan menunjuk peristiwa yang hilang, laporan mengatakannya, bukan menyembunyikannya.",
   "Pick an incident and generate Markdown, HTML or JSON. Every claim in the output cites stored events.":
@@ -256,8 +230,8 @@ const ID: Record<string, string> = {
     "Aturan adalah fungsi deterministik atas peristiwa yang dinormalisasi.",
   "Read one, understand what it matches, and disable the ones that do not fit your environment.":
     "Baca satu aturan, pahami apa yang dicocokkan, dan matikan yang tidak sesuai lingkungan Anda.",
-  "That is the whole loop. Import, detect, investigate, report — repeat.":
-    "Itulah keseluruhan alurnya. Impor, deteksi, investigasi, laporan — ulangi.",
+  "That is the whole loop. Import, detect, investigate, report, repeat.":
+    "Itulah keseluruhan alurnya. Impor, deteksi, investigasi, laporan, ulangi.",
 
   // ---- common actions / labels -------------------------------------------
   "Save": "Simpan",
@@ -341,7 +315,18 @@ const ID: Record<string, string> = {
   "Parse status": "Status parsing",
   "Parse notes": "Catatan parsing",
   "Validation notes": "Catatan validasi",
+  "They are kept, because dropping them would lose evidence, but their place on the timeline is not certain. Unparseable timestamps are never replaced with a guessed value.":
+    "Tetap disimpan, karena menghapusnya berarti kehilangan bukti, tetapi posisinya di linimasa tidak pasti. Stempel waktu yang tidak bisa diurai tidak pernah diganti dengan nilai tebakan.",
+  "the record carried no timezone, so a default was applied. The instant may be off by hours.":
+    "catatan tidak membawa zona waktu, sehingga dipakai nilai bawaan. Waktunya bisa meleset beberapa jam.",
+  "a timestamp was present but could not be parsed, so no instant is stored for it.":
+    "ada stempel waktu tetapi tidak bisa diurai, sehingga tidak ada waktu yang disimpan.",
+  "the record had no timestamp field at all.":
+    "catatan sama sekali tidak punya kolom stempel waktu.",
   "Preview (not saved)": "Pratinjau (belum disimpan)",
+  "Description": "Deskripsi",
+  "Normalized events": "Peristiwa ternormalisasi",
+  "event(s) have degraded timestamps.": "peristiwa punya stempel waktu bermasalah.",
   "Import result": "Hasil impor",
   "Still unknown": "Belum diketahui",
   "Nothing to show": "Tidak ada yang ditampilkan",
@@ -351,7 +336,7 @@ const ID: Record<string, string> = {
   "Incident status": "Status insiden",
   "Investigation status": "Status investigasi",
   "Impacted assets": "Aset terdampak",
-  "Findings — why this fired": "Temuan — mengapa ini terpicu",
+  "Findings, why this fired": "Temuan, mengapa ini terpicu",
   "Hypotheses": "Hipotesis",
   "Timeline interpretation": "Interpretasi linimasa",
   "Evidence events": "Peristiwa bukti",
@@ -458,8 +443,8 @@ const ID: Record<string, string> = {
   "Generate a report": "Buat laporan",
   "Generate one from an incident above.": "Buat satu dari insiden di atas.",
   "Stored reports": "Laporan tersimpan",
-  "Investigation reports generated from stored data only — facts and hypotheses stay separated.":
-    "Laporan investigasi dibuat hanya dari data tersimpan — fakta dan hipotesis tetap dipisahkan.",
+  "Investigation reports generated from stored data only, facts and hypotheses stay separated.":
+    "Laporan investigasi dibuat hanya dari data tersimpan, fakta dan hipotesis tetap dipisahkan.",
   "Markdown": "Markdown",
   "HTML (printable)": "HTML (siap cetak)",
   "JSON": "JSON",
@@ -478,8 +463,8 @@ const ID: Record<string, string> = {
   "What the SHA-256 proves:": "Apa yang dibuktikan SHA-256:",
   "AI output is interpretation, not evidence.":
     "Keluaran AI adalah interpretasi, bukan bukti.",
-  "AI-generated — distinct from observed facts":
-    "Dihasilkan AI — berbeda dari fakta teramati",
+  "AI-generated, distinct from observed facts":
+    "Dihasilkan AI, berbeda dari fakta teramati",
   "Every citation referenced events that do not exist in this incident.":
     "Setiap kutipan merujuk peristiwa yang tidak ada di insiden ini.",
   "Uncertainty:": "Ketidakpastian:",
@@ -496,13 +481,11 @@ const ID: Record<string, string> = {
   "Audit log": "Log audit",
   "Next steps": "Langkah berikutnya",
   "AI-generated": "Dihasilkan AI",
-  "Documentation": "Dokumentasi",
   "Search events": "Cari peristiwa",
   "Search events…": "Cari peristiwa…",
   "Search raw / process / file / domain…": "Cari mentah / proses / berkas / domain…",
   "Graph": "Graf",
   "Next →": "Berikutnya →",
-  "Previous": "Sebelumnya",
   "User": "Pengguna",
   "Users": "Pengguna",
   "Process": "Proses",
@@ -546,6 +529,8 @@ const ID_RULES: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
   [/^(\d+) checks passed$/, (m) => `${m[1]} pemeriksaan lulus`],
   [/^(\d+) nodes · (\d+) edges · zoom (\d+)%$/, (m) => `${m[1]} simpul · ${m[2]} sisi · zoom ${m[3]}%`],
   [/^Total alerts: (\d+)$/, (m) => `Total peringatan: ${m[1]}`],
+  [/^(\d+) event\(s\) have degraded timestamps\.$/, (m) => `${m[1]} peristiwa punya stempel waktu bermasalah.`],
+  [/^(\d+)-(\d+) of (\d+)$/, (m) => `${m[1]}-${m[2]} dari ${m[3]}`],
 ];
 
 function lookup(raw: string): string | null {

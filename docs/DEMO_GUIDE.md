@@ -1,6 +1,6 @@
-# Demo Guide — 3 menit untuk juri
+# Demo Guide, 3 menit untuk juri
 
-Dataset: **sintetis** (25–29 event, 4 insiden). Tidak ada data mesin nyata.
+Dataset: **sintetis** (25-29 event, 4 insiden). Tidak ada data mesin nyata.
 
 ## Persiapan (sebelum tampil)
 
@@ -13,22 +13,22 @@ Pastikan dashboard menampilkan angka non-nol. Klik **Load demo** bila kosong.
 
 ## Alur
 
-1. **Dashboard** — 25 event, 10 alert, 4 insiden, 5 aset. Sebutkan: setiap angka
+1. **Dashboard**, 25 event, 10 alert, 4 insiden, 5 aset. Sebutkan: setiap angka
    berasal dari tabel SQLite, bukan konstanta.
-2. **INC-0001 → Overview** — tunjukkan pemisahan tegas: "IOC match adalah fakta;
+2. **INC-0001 → Overview**, tunjukkan pemisahan tegas: "IOC match adalah fakta;
    host terkompromi adalah hipotesis". Panel bukti menyebut ID event sumber.
-3. **Timeline** — 9 event berurutan: email phishing → proses → koneksi luar.
-4. **Attack Graph** — tekan **⤢ Fit to view**. Graf otomatis terpusat dan seluruh node
+3. **Timeline**, 9 event berurutan: email phishing → proses → koneksi luar.
+4. **Attack Graph**, tekan **⤢ Fit to view**. Graf otomatis terpusat dan seluruh node
    masuk frame. Sorot satu node: edge terkait menyala, label relasi muncul.
    - Toggle **Show inferred** → edge putus-putus (hipotesis) vs solid (observed).
    - Klik chip **RELATIONS** untuk menyembunyikan jenis edge tertentu.
    - Pilih **incident** di dropdown untuk memfilter graf ke host insiden itu.
    - Klik node → panel kanan menampilkan **EVIDENCE** (baris event asli).
-5. **Detection Rules** — 6 rule deterministik; alert selalu membawa ID event.
-6. **AI Analysis (opsional)** — bila provider aktif: tunjukkan hipotesis
+5. **Detection Rules**, 6 rule deterministik; alert selalu membawa ID event.
+6. **AI Analysis (opsional)**, bila provider aktif: tunjukkan hipotesis
    `evidence-linked` vs `no surviving evidence`, dan jumlah sitasi yang dibuang
    evidence guard. Bila tidak ada provider: nyatakan mode core-only tetap penuh.
-7. **Report** — unduh markdown; buka seksi "Confirmed compromise: NOT established".
+7. **Report**, unduh markdown; buka seksi "Confirmed compromise: NOT established".
 
 ## Kalimat kunci
 
@@ -37,5 +37,5 @@ Pastikan dashboard menampilkan angka non-nol. Klik **Load demo** bila kosong.
 
 ## Jangan dilakukan saat demo
 
-- Jangan gunakan `--host 0.0.0.0` tanpa token (startup akan menolak — itu memang fitur).
+- Jangan gunakan `--host 0.0.0.0` tanpa token (startup akan menolak, itu memang fitur).
 - Jangan impor log mesin nyata di depan juri; pakai dataset sintetis.

@@ -1,27 +1,25 @@
 # Skrip video demo, SentinelGraph AI
 
-Durasi target: **3 menit** (batas tipikal submission hackathon).
-Format keluaran: 1920x1080, rekam layar penuh browser, narasi Bahasa Indonesia.
+Durasi target: **3 menit**. Format 1920x1080, rekam layar penuh browser, narasi Bahasa Indonesia.
 
 ---
 
 ## Persiapan sebelum rekam
 
-1. Tutup semua tab browser lain. Satu tab saja: `http://127.0.0.1:8088/`
+1. Tutup semua tab lain. Sisakan satu: `http://127.0.0.1:8088/`
 2. Zoom browser 100%, lebar jendela minimal 1440px.
-3. Pastikan server jalan, lalu muat ulang demo dari UI:
-   - Klik **Load demo dataset** → pastikan Dashboard menampilkan **29 event, 10 alert, 4 insiden**.
-   - Master key tidak perlu diset manual. Bila `SG_MASTER_KEY` kosong, kunci dibuat otomatis
+3. Pastikan server jalan, lalu muat ulang demo:
+   - Klik **Load demo dataset**. Dashboard harus menampilkan **29 event, 10 alert, 4 insiden**.
+   - Master key tidak perlu diset. Kalau `SG_MASTER_KEY` kosong, kuncinya dibuat otomatis
      di `<data dir>/master.key` saat pertama dipakai.
 4. Siapkan provider AI:
-   - Lokal tanpa key (paling praktis untuk rekaman): jalankan Ollama, lalu di UI
-     **AI Providers** tambahkan provider `ollama` dengan base URL `http://127.0.0.1:11434`.
-     Hanya Ollama yang diizinkan memakai alamat loopback.
-   - Atau pakai provider cloud dengan key Anda sendiri.
-   - Di UI: **AI Providers** → pastikan status "Provider configured and ready."
-   - Catatan: `fake_provider` di `backend/tests/test_ai.py` adalah fixture pytest, bukan
-     skrip yang bisa dijalankan untuk demo. Tidak ada berkas `fake_provider.py`.
-5. Rekam percobaan **dulu tanpa mikrofon**, tonton ulang, baru rekam dengan narasi.
+   - Paling praktis: jalankan Ollama, lalu di **AI Providers** tambahkan provider `ollama`
+     dengan base URL `http://127.0.0.1:11434`. Hanya Ollama yang boleh pakai alamat loopback.
+   - Atau provider cloud dengan key Anda sendiri.
+   - Statusnya harus "Provider configured and ready."
+   - Catatan: `fake_provider` di `backend/tests/test_ai.py` itu fixture pytest, bukan skrip
+     yang bisa dijalankan. Tidak ada berkas `fake_provider.py`.
+5. Rekam percobaan dulu tanpa mikrofon. Tonton ulang, baru rekam dengan narasi.
 
 ---
 
@@ -32,37 +30,37 @@ Format keluaran: 1920x1080, rekam layar penuh browser, narasi Bahasa Indonesia.
 **Layar:** Dashboard.
 
 **Narasi:**
-> "Setiap hari tim keamanan menerima ratusan alert. Masalahnya bukan kekurangan data -
-> masalahnya merangkai potongan itu menjadi cerita yang bisa dipertanggungjawabkan.
-> Ini SentinelGraph AI: dari sinyal menjadi cerita."
+> "Tim keamanan tiap hari kebanjiran alert. Datanya sudah ada, dan di situlah masalahnya:
+> terlalu banyak, tersebar di banyak alat, dan tidak ada yang menyusunnya jadi satu cerita.
+> Itu yang coba kami bereskan."
 
-**Aksi:** diam, biarkan dashboard terlihat. Sorot angka 29 / 10 / 4.
+**Aksi:** diam. Biarkan dashboard terlihat. Sorot angka 29 / 10 / 4.
 
 ---
 
 ### SHOT 2, Bukan dashboard kosong (0:15-0:35)
 
-**Layar:** Masih Dashboard, gulir pelan ke tabel insiden.
+**Layar:** Masih Dashboard. Gulir pelan ke tabel insiden.
 
 **Narasi:**
-> "Dua puluh sembilan event, sepuluh alert, empat insiden. Semua angka ini berasal dari
-> tabel database, bukan konstanta. Setiap baris bisa ditelusuri sampai event aslinya."
+> "Dua puluh sembilan event, sepuluh alert, empat insiden. Angka ini dibaca langsung dari
+> database. Klik satu baris, Anda bisa menelusurinya sampai ke event aslinya."
 
 **Aksi:** klik baris **INC-0001**.
 
 ---
 
-### SHOT 3, Pemisahan fakta vs hipotesis (0:35-1:05)
+### SHOT 3, Fakta vs hipotesis (0:35-1:05)
 
 **Layar:** Tab **Overview**, INC-0001.
 
 **Narasi:**
-> "Perhatikan kalimat ini. IOC match adalah fakta. Bahwa host terkompromi adalah
-> hipotesis yang butuh pembuktian. Kami tidak memberi tahu Anda bahwa Anda diserang -
-> kami memberi tahu apa yang diamati, dan apa yang belum bisa dibuktikan."
+> "Lihat baris ini. IOC match itu fakta yang teramati. Kesimpulan bahwa host-nya
+> terkompromi baru hipotesis, dan itu masih perlu dibuktikan. Produk ini berhenti di
+> apa yang teramati, dan bilang terus terang kalau ada yang belum bisa dibuktikan."
 
-**Aksi:** scroll pelan menuju kartu **Findings, why this fired**, tunjuk satu narasi R-004
-yang berbunyi "Whether data left the network is NOT established".
+**Aksi:** scroll pelan ke kartu **Findings, why this fired**. Tunjuk narasi R-004:
+"Whether data left the network is NOT established".
 
 ---
 
@@ -71,11 +69,11 @@ yang berbunyi "Whether data left the network is NOT established".
 **Layar:** Tab **Timeline**.
 
 **Narasi:**
-> "Sembilan event berurutan dalam sembilan menit: email phishing masuk, kredensial
-> dipanen, PowerShell dipanggil Outlook, koneksi ke infrastruktur C2, akses file
-> keuangan dan HR, lalu transfer keluar empat belas koma tujuh megabyte."
+> "Sembilan event dalam sembilan menit. Email phishing masuk, kredensial dipakai, Outlook
+> memanggil PowerShell, keluar koneksi ke infrastruktur C2, file keuangan dan HR diakses,
+> lalu transfer keluar empat belas koma tujuh megabyte."
 
-**Aksi:** scroll dari event teratas ke terbawah, berhenti di baris transfer.
+**Aksi:** scroll dari event teratas ke terbawah. Berhenti di baris transfer.
 
 ---
 
@@ -84,21 +82,22 @@ yang berbunyi "Whether data left the network is NOT established".
 **Layar:** Tab **Attack graph**.
 
 **Narasi:**
-> "Inilah graf serangannya. Alert di inti, host di cincin luar, entitas perimeter di
-> tepi. Tapi yang penting bukan gambarnya, melainkan bahwa setiap garis bisa dibuktikan."
+> "Ini graf serangannya. Alert di tengah, host di sekelilingnya, entitas perimeter di luar.
+> Setiap garis di sini bisa ditelusuri ke event asalnya."
 
 **Aksi:** klik node **WS-FIN-07**. Panel kanan muncul. Sorot baris:
 ```
 observed  evidence: #147, #148
 ```
-lalu sorot baris inferred yang berbunyi:
+lalu sorot baris inferred:
 ```
 INFERRED  derived relation, no single source event
 ```
 
 **Narasi lanjutan:**
-> "Relasi yang tercatat langsung membawa ID event sumbernya. Relasi yang kami turunkan
-> diberi label berbeda dan dijelaskan cara penurunannya. Kami tidak mencampur keduanya."
+> "Relasi yang benar-benar tercatat membawa ID event sumbernya. Kalau relasinya hasil
+> turunan, labelnya beda dan cara menurunkannya dijelaskan. Dua-duanya tidak pernah
+> dicampur."
 
 ---
 
@@ -107,26 +106,27 @@ INFERRED  derived relation, no single source event
 **Layar:** Tab **AI analysis**.
 
 **Narasi:**
-> "Sekarang bagian yang paling sering dilewati produk lain. Saya jalankan analisis AI."
+> "Sekarang saya jalankan analisis AI-nya."
 
 **Aksi:** klik **Analyze with AI**. Tunggu hasil.
 
 **Narasi:**
-> "Model mengembalikan dua hipotesis. Yang pertama bertanda evidence-linked, ia mengutip
-> event yang benar-benar ada. Yang kedua bertanda no surviving evidence."
+> "Modelnya balik dengan dua hipotesis. Yang pertama evidence-linked, sitasinya event yang
+> memang ada. Yang kedua ditandai no surviving evidence."
 
-**Aksi:** sorot chip `no surviving evidence`, lalu sorot baris sitasi di bawah hipotesis:
+**Aksi:** sorot chip `no surviving evidence`, lalu baris sitasinya:
 ```
 supports: none    contradicts: none
 ```
-Catatan: baris `Evidence guard: N citation(s) ... were removed` **tidak** ada di panel AI,
-melainkan muncul di laporan yang diunduh (seksi 6). Sorot di SHOT 7.
+Catatan: baris `Evidence guard: N citation(s) ... were removed` **tidak** ada di panel AI.
+Baris itu muncul di laporan (seksi 6). Sorot di SHOT 7.
 
 **Narasi:**
-> "Model tadi mengarang enam rujukan. ID yang disebutnya tidak ada di database.
-> Setiap sitasi diperiksa. Yang tidak ada dibuang. Hipotesis yang kehilangan seluruh
-> buktinya tetap ditampilkan, tapi ditandai jelas sebagai klaim tanpa dasar.
-> Kami tidak menyembunyikannya. Justru itu buktinya bahwa sistem ini bisa dipercaya."
+> "Model tadi mengarang enam rujukan. ID yang disebutnya tidak ada di database. Sistem
+> memeriksa tiap sitasi, membuang yang tidak ada, lalu tetap menampilkan hipotesisnya
+> dengan tanda jelas bahwa klaimnya tidak punya dasar. Sebenarnya lebih gampang kalau
+> hipotesis yang salah itu kami buang saja dan tidak ada yang tahu. Tapi karena
+> ditampilkan dan dilabeli, Anda bisa menilai sendiri."
 
 **Aksi:** sorot disclaimer di bawah ringkasan:
 ```
@@ -135,12 +135,12 @@ Summary is free-form model text and is not verified against the event store.
 
 ---
 
-### SHOT 7, Laporan yang jujur (2:30-2:50)
+### SHOT 7, Laporan (2:30-2:50)
 
 **Layar:** Tab **Report** → klik **Download**.
 
 **Narasi:**
-> "Terakhir, laporannya. Ini yang biasanya tidak dilakukan alat lain."
+> "Terakhir, laporannya."
 
 **Aksi:** buka file markdown. Di seksi 6, sorot baris:
 ```
@@ -151,8 +151,8 @@ lalu scroll ke seksi 7.
 
 **Narasi:**
 > "Confirmed compromise: not established. Confirmed data exfiltration: not established.
-> Laporan yang menyatakan apa yang tidak bisa dibuktikan, itu yang membuatnya bisa
-> dipakai di ruang rapat, bukan hanya di dashboard."
+> Laporan ini menyebut hal yang tidak bisa dibuktikan. Laporan begini yang bisa dibawa
+> ke rapat, bukan cuma dilihat sebentar di dashboard."
 
 ---
 
@@ -161,34 +161,33 @@ lalu scroll ke seksi 7.
 **Layar:** kembali ke Dashboard.
 
 **Narasi:**
-> "SentinelGraph AI. Deteksi deterministik yang bisa diaudit, graf yang setiap garisnya
-> berbukti, dan AI yang diperlakukan sebagai tersangka, bukan saksi.
-> Dari sinyal menjadi cerita."
+> "Deteksi yang bisa diaudit, graf yang tiap garisnya bisa ditelusuri, dan AI yang kami
+> perlakukan sebagai tersangka, bukan saksi. Itu SentinelGraph AI."
 
 ---
 
 ## Catatan produksi
 
-**Yang harus diperlihatkan apa adanya (jangan dipotong):**
-- Chip `no surviving evidence`, ini pembeda utama produk.
-- Baris "evidence: #..." pada panel node.
-- Seksi "NOT established" pada laporan.
+**Yang jangan dipotong:**
+- Chip `no surviving evidence`. Ini pembeda utamanya.
+- Baris "evidence: #..." di panel node.
+- Seksi "NOT established" di laporan.
 
-**Yang harus disebutkan terus terang bila ditanya:**
-- Provider yang dipakai saat rekaman adalah model lokal (Ollama), bukan model cloud.
-  Tujuannya mendemonstrasikan mekanisme pertahanan, bukan kualitas model.
-- Jalur jaringan nyata sudah diuji ke api.openai.com dan menghasilkan 401 asli,
-  dilaporkan sebagai `ok:false` dengan `error_category: "auth"`.
-- Jumlah dan ID sitasi karangan bergantung pada apa yang benar-benar dikembalikan model
-  saat rekaman. Sebutkan jumlahnya, atau baca ID langsung dari layar. Jangan menyebut ID
-  tertentu (misalnya 9999, 8888, 6666) kecuali memang muncul di rekaman Anda.
+**Kalau ditanya, jawab terus terang:**
+- Provider saat rekaman adalah model lokal (Ollama), bukan model cloud. Yang
+  didemonstrasikan mekanisme pertahanannya, bukan kualitas modelnya.
+- Jalur jaringan nyata sudah diuji ke api.openai.com dan dapat 401 asli, tercatat sebagai
+  `ok:false` dengan `error_category: "auth"`.
+- Jumlah dan ID sitasi karangan tergantung apa yang benar-benar dikembalikan model saat
+  rekaman. Sebut jumlahnya, atau baca ID-nya dari layar. Jangan sebut ID tertentu
+  (misalnya 9999, 8888, 6666) kalau tidak muncul di rekaman Anda.
 
-**Bila ada yang gagal saat rekaman:**
-- Halaman putih → stop rekaman, cek konsol, ulangi. Jangan menyambung.
-- AI error → tampilkan apa adanya di layar, lalu lanjutkan. Justru bagus: menunjukkan
-  sistem tidak berpura-pura berhasil.
+**Kalau ada yang gagal saat rekaman:**
+- Halaman putih: stop, cek konsol, ulangi. Jangan disambung.
+- AI error: biarkan terlihat di layar, lalu lanjut. Justru bagus, menunjukkan sistemnya
+  tidak berpura-pura berhasil.
 
 **Setelah rekaman:**
 - Tonton ulang sekali penuh. Pastikan tidak ada notifikasi OS yang muncul.
-- Pastikan wajah/nama pengguna di layar tidak terekspos (cek taskbar, tab lain).
-- Ekspor 1080p, H.264, bitrate ~8 Mbps.
+- Pastikan nama pengguna di layar tidak terekspos (cek taskbar dan tab lain).
+- Ekspor 1080p, H.264, bitrate sekitar 8 Mbps.

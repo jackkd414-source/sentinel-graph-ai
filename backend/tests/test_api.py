@@ -534,7 +534,15 @@ def test_spa_shell_is_not_cached(client):
 
     Regression: after a rebuild the browser reused a cached shell and the user
     kept seeing a pre-fix screen while the API already returned fixed results.
+
+    Skipped on a fresh checkout: the shell is served from frontend/dist, which
+    is a build artifact (`cd frontend && npm run build`), not a repo file.
     """
+    from sentinelgraph import config
+
+    if not (config.get_settings().static_dir / "index.html").is_file():
+        pytest.skip("frontend/dist not built; run `cd frontend && npm run build`")
+
     r = client.get("/")
     assert r.status_code == 200
     assert "no-store" in r.headers.get("cache-control", "").lower()

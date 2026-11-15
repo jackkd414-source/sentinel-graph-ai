@@ -344,8 +344,10 @@ Stub provider mengembalikan tiga jenis kebohongan:
 | Dokumen | Lokasi |
 |---|---|
 | README (dokumen ini) | `README.md` |
+| Indeks semua dokumen | `docs/README.md` |
 | Proposal submission | `docs/PROPOSAL.md` |
 | Slide deck (10 slide + versi 3 menit) | `docs/SLIDES.md` |
+| **Slide deck siap presentasi (.pptx)** | `docs/presentation/` |
 | Skrip video demo | `docs/VIDEO_SCRIPT.md` |
 | Arsitektur mendetail | `docs/ARCHITECTURE.md` |
 | Model ancaman & batasan | `docs/SECURITY.md` |
@@ -355,6 +357,7 @@ Stub provider mengembalikan tiga jenis kebohongan:
 | **Pemetaan MITRE ATT&CK per rule** | `docs/ATTACK_MAPPING.md` |
 | Screenshot asli (dari aplikasi berjalan) | `docs/screenshots/` |
 | Verifikasi mandiri | `tools/verify.py` |
+| Catatan proses internal (remediasi, rilis) | `docs/internal/` |
 
 ## 12. Risiko keamanan, remediasi, dan batasan
 

@@ -50,7 +50,7 @@ npm run build                                  # tsc + vite build
 
 Tidak ada runner unit-test frontend di repo ini (tidak menambah dependency). Perilaku
 graph diverifikasi lewat pengukuran di browser: jumlah node, `scale`, dan `outOfView`
-(lihat `REMEDIATION_REPORT.md`).
+(lihat `internal/REMEDIATION_REPORT.md`).
 
 ## End-to-end
 

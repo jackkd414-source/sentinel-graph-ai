@@ -12,3 +12,6 @@ pytest-asyncio==1.4.1
 iniconfig==2.3.1
 pluggy==1.7.0
 Pygments==2.21.0
+
+# Presentation deck generator (make slides). Not needed to run the product.
+python-pptx==1.0.2

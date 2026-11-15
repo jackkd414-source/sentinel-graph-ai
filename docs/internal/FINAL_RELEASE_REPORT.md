@@ -129,8 +129,7 @@ sehingga bukti `ai_runs` hidup di mesin pengembang, bukan di dalam arsip.
 Dijalankan oleh `tools/make_release.py` (exit 0):
 
 - `[2/7]` tidak ada `.db` / telemetri / credential / `.env.*` di tree rilis.
-- `[4/7]` scan DB sintetis → **`TOTAL PII ROW-MATCHES: 0`** (marker: `DESKTOP-`, `S-1-5-`,
-  `DESKTOP-OSCoacqx`, `Nainggolan`).
+- `[4/7]` scan DB sintetis → **`TOTAL PII ROW-MATCHES: 0`** (marker: pola `DESKTOP-`, `S-1-5-`, plus hostname dan username mesin pengembang). <!-- PII-SCAN-ALLOW: menyebut nama pola milik scanner sendiri, bukan data bocor -->
 - `[5/7]` dataset demo sintetis ter-ship: 25 event → `data/demo/demo-events.jsonl`.
 - `[6/7]` scan teks + demo + screenshot bersih (8 PNG, nama file + sidecar diperiksa).
 - `[7/7]` arsip OK.

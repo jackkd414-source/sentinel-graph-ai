@@ -6,7 +6,7 @@ PY_LIN  ?= .venv/bin/python
 NODE    ?= node
 TSC     := frontend/node_modules/typescript/bin/tsc
 
-.PHONY: test typecheck build verify release clean
+.PHONY: test typecheck build verify release slides clean
 
 test:                 ## backend test suite (config from pyproject.toml)
 	$(PY) -m pytest
@@ -22,6 +22,9 @@ verify:               ## end-to-end against a running server
 
 release:              ## clean, PII-gated bundle -> release/
 	$(PY) tools/make_release.py
+
+slides:               ## presentation deck from docs/SLIDES.md -> docs/presentation/
+	$(PY) tools/make_slides.py
 
 clean:
 	rm -rf frontend/dist release .pytest_cache

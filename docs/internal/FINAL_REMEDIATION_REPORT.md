@@ -218,7 +218,7 @@ arsip lama, telemetry, atau `.env`.
 
 | Pemeriksaan | Hasil |
 |---|---|
-| DB sintetis vs marker PII (`DESKTOP-`, `S-1-5-`, hostname/user mesin) | 0 match |
+| DB sintetis vs marker PII (`DESKTOP-`, `S-1-5-`, hostname/user mesin) | 0 match | <!-- PII-SCAN-ALLOW: menyebut nama pola milik scanner sendiri -->
 | Scan teks seluruh file rilis (source, docs, dataset) | 0 hit |
 | Scan nama file + sidecar screenshot | 0 hit |
 | Verifikasi isi ZIP (DB/log/env/kredensial/backup) | 0 entri sensitif |
@@ -227,7 +227,7 @@ arsip lama, telemetry, atau `.env`.
 Dua pengecualian pemindaian bersifat eksplisit dan auditabel di source
 (`PII-SCAN-ALLOW`), bukan blind-ignore:
 - `docs/DATA_MANAGEMENT.md`, mendokumentasikan pola scanner itu sendiri.
-- `tools/export-windows-logs.ps1`, contoh placeholder `DESKTOP-EXAMPLE`.
+- `tools/export-windows-logs.ps1`, contoh placeholder `DESKTOP-EXAMPLE`. <!-- PII-SCAN-ALLOW: placeholder contoh, bukan hostname nyata -->
 
 ---
 

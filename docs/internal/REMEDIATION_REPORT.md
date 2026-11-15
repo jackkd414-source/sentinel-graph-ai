@@ -71,7 +71,7 @@ Backup: `backup/source-20261111-232051.tar.gz`, `backup/sentinelgraph-real-20261
 
 **Release**
 - `tools/make_release.py` (exclude runtime/telemetry, bootstrap sintetis, PII gate).
-- `tools/check_pii_db.py` (marker `DESKTOP-*`, `S-1-5-*`, hostname/user runtime).
+- `tools/check_pii_db.py` (marker `DESKTOP-*`, `S-1-5-*`, hostname/user runtime). <!-- PII-SCAN-ALLOW: menyebut nama pola milik scanner sendiri -->
 
 ## 4-5. Test yang dijalankan dan hasil
 

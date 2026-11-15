@@ -1,0 +1,24 @@
+# Run the whole product with one command:
+#
+#   SG_AUTH_TOKEN=$(python -c "import secrets;print(secrets.token_urlsafe(32))") \
+#     docker compose up -d --build
+#
+# Then open http://<host>:8088 and paste that token into the app's token prompt.
+# The token is required: the server refuses to bind off-loopback without it.
+
+services:
+  sentinelgraph:
+    build: .
+    image: sentinelgraph-ai
+    ports:
+      - "8088:8088"
+    environment:
+      # Required. Generate one and keep it out of git.
+      SG_AUTH_TOKEN: "${SG_AUTH_TOKEN:?set SG_AUTH_TOKEN before starting}"
+    volumes:
+      # Holds the SQLite database, artifacts and the auto-generated master key.
+      - sg-data:/data
+    restart: unless-stopped
+
+volumes:
+  sg-data:

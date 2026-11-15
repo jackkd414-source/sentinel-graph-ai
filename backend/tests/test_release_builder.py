@@ -89,6 +89,31 @@ def test_build_tree_skips_runtime_data_dir(tmp_path, monkeypatch):
     assert copied == ["backend/api.py"]
 
 
+def test_build_tree_ships_deployment_artefacts(tmp_path, monkeypatch):
+    """The container definition must reach the archive.
+
+    Without it the organisers receive a product they cannot run, which is the
+    whole point of the bundle. Dotted names need an explicit allowlist entry,
+    so ``.dockerignore`` is the one most likely to go missing unnoticed.
+    """
+    src = tmp_path / "src"
+    src.mkdir()
+    for name in ("Dockerfile", "docker-compose.yml", ".dockerignore", "README.md"):
+        (src / name).write_text("x", encoding="utf-8")
+    (src / "secret.pem").write_text("x", encoding="utf-8")
+
+    monkeypatch.setattr(mr, "ROOT", src)
+    out = tmp_path / "out"
+    out.mkdir()
+    mr.build_tree(out)
+
+    copied = sorted(p.name for p in out.rglob("*") if p.is_file())
+    assert "Dockerfile" in copied
+    assert "docker-compose.yml" in copied
+    assert ".dockerignore" in copied
+    assert "secret.pem" not in copied
+
+
 # ---------------------------------------------------------------------------
 # archive verification
 # ---------------------------------------------------------------------------

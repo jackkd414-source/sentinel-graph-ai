@@ -37,6 +37,15 @@ sysmon-export.log
 /sysmon-test.json
 /abstest.json
 
+# --- Demo video / large media --------------------------------
+# Recorded footage is a submission artifact, not a repository file. The current
+# take is ~120 MB and GitHub rejects files over 100 MB, so it travels outside
+# git: as a release asset, a shared link, or under Git LFS.
+*.mp4
+*.mov
+*.mkv
+*.webm
+
 # --- Python --------------------------------------------------
 .venv/
 venv/

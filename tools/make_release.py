@@ -36,6 +36,9 @@ ALLOWED_ROOT_FILES = {
     "README.md", "requirements.txt", "requirements-dev.txt", ".env.example",
     ".gitignore", "LICENSE", "LICENSE.md", "pyproject.toml", "pytest.ini",
     "setup.cfg", "tox.ini", "Makefile",
+    # Deployment artefacts. The organisers must be able to run the product from
+    # the archive alone, so the container definition travels with it.
+    "Dockerfile", "docker-compose.yml", ".dockerignore",
 }
 # Dotted top-level trees (``.github``, ``.vscode``, ...) are skipped wholesale
 # because they can carry CI secrets, caches and editor state. Only the exact

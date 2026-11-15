@@ -1,0 +1,40 @@
+# Keep the build context small, and keep real data out of the image.
+#
+# The three telemetry exports at the repo root are this workstation's own
+# Windows logs, not sample data. They must never be baked into an image.
+
+# --- local runtime state ---------------------------------------------------
+data/
+logs/
+backup/
+release/
+_inspect/
+
+# --- host telemetry (real machine logs) ------------------------------------
+sysmon.json
+sysmon-export.log
+security.json
+firewall.json
+
+# --- python ----------------------------------------------------------------
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# --- node / frontend -------------------------------------------------------
+frontend/node_modules/
+frontend/dist/
+
+# --- repo & editor noise ---------------------------------------------------
+.git/
+.gitignore
+.env
+.env.*
+*.log
+*.mp4
+*.mov
+*.mkv
+*.webm
+.DS_Store

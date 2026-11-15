@@ -239,6 +239,17 @@ export SG_AUTH_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32
 ./.venv/Scripts/python.exe -m sentinelgraph serve --host 0.0.0.0 --port 8088
 ```
 
+### Menjalankan untuk juri (container)
+
+```bash
+export SG_AUTH_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')"
+docker compose up -d --build
+```
+
+Satu image menyajikan SPA dan API pada port yang sama, jadi yang dibagikan ke juri
+hanya URL dan token. Alasan GitHub Pages dan Vercel tidak dipakai, cara kerja
+volume `/data`, dan catatan verifikasi Linux ada di `docs/DEPLOY.md`.
+
 ### Release bersih (tanpa data mesin nyata)
 
 ```bash

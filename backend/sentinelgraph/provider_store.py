@@ -15,7 +15,7 @@ from typing import Any
 
 from . import ai_providers
 from .config import env_provider_keys
-from .db import cursor, get_conn, rows_to_dicts
+from .db import cursor, fetchall, fetchone, get_conn, rows_to_dicts
 from .security import CredentialCipher, mask_secret, redact_secrets
 from .timeutil import now_iso
 
@@ -23,8 +23,8 @@ _cipher = CredentialCipher()
 
 
 def list_configs() -> list[dict[str, Any]]:
-    rows = rows_to_dicts(get_conn().execute(
-        "SELECT * FROM provider_configs ORDER BY id").fetchall())
+    rows = rows_to_dicts(fetchall(
+        "SELECT * FROM provider_configs ORDER BY id"))
     return [_public(r) for r in rows]
 
 
@@ -48,8 +48,8 @@ def _public(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def get_config(config_id: int) -> dict[str, Any] | None:
-    row = get_conn().execute(
-        "SELECT * FROM provider_configs WHERE id=?", (config_id,)).fetchone()
+    row = fetchone(
+        "SELECT * FROM provider_configs WHERE id=?", (config_id,))
     return dict(row) if row else None
 
 
@@ -80,8 +80,8 @@ def build_spec(row: dict[str, Any]) -> ai_providers.ProviderSpec:
 
 def active_spec() -> tuple[ai_providers.ProviderSpec | None, dict[str, Any] | None]:
     """Return the active provider spec, or None when running in core mode."""
-    row = get_conn().execute(
-        "SELECT * FROM provider_configs WHERE is_active=1 LIMIT 1").fetchone()
+    row = fetchone(
+        "SELECT * FROM provider_configs WHERE is_active=1 LIMIT 1")
     if not row:
         return None, None
     d = dict(row)
@@ -112,10 +112,11 @@ def create_config(payload: dict[str, Any]) -> dict[str, Any]:
             secret_source = "db"
         else:
             raise ValueError(
-                "Secure credential storage is unavailable because SG_MASTER_KEY is not set. "
-                "Generate one with `python -m sentinelgraph.security keys`, add it to .env, "
-                "restart, then save the provider. Alternatively leave the key empty and set "
-                "the provider's environment variable (e.g. OPENAI_API_KEY)."
+                "Secure credential storage is unavailable: the master key could not be "
+                "read or created. Set SG_MASTER_KEY (generate one with "
+                "`python -m sentinelgraph keys`) or make the data directory writable, "
+                "then retry. Alternatively leave the key empty and set the provider's "
+                "environment variable (e.g. OPENAI_API_KEY)."
             )
     else:
         if ai_providers.env_key_for(provider_type):
@@ -176,8 +177,8 @@ def update_config(config_id: int, payload: dict[str, Any]) -> dict[str, Any]:
     if raw_key:
         if not _cipher.available:
             raise ValueError(
-                "Cannot store a new key without SG_MASTER_KEY. Set the environment "
-                "variable instead, or configure the master key and restart."
+                "Cannot store a new key: the master key could not be read or created. "
+                "Set SG_MASTER_KEY or make the data directory writable, then retry."
             )
         fields["secret_enc"] = _cipher.encrypt(raw_key)
         fields["secret_source"] = "db"
@@ -244,6 +245,7 @@ def ai_status() -> dict[str, Any]:
             "provider": None, "model": None,
             "last_test_status": None, "last_test_at": None,
             "encryption_available": _cipher.available,
+            "credential_storage": _cipher.storage_info(),
         }
     d = _public(row)
     # A provider only needs a credential if its type says so. Ollama running
@@ -262,4 +264,5 @@ def ai_status() -> dict[str, Any]:
         "last_test_status": row.get("last_test_status"),
         "last_test_at": row.get("last_test_at"),
         "encryption_available": _cipher.available,
+        "credential_storage": _cipher.storage_info(),
     }

@@ -345,18 +345,19 @@ def test_reasoning_model_that_burns_budget_reports_truncation_not_invalid_json()
         def __exit__(self, *a): return False
         def post(self, *a, **k): return FakeResp()
 
-    # Stub out URL validation too: this test targets response handling, and the
-    # SSRF guard would reject the dummy loopback base_url before the POST.
-    orig_client = p.httpx.Client
+    # This test targets response handling. The SSRF guard now runs again while
+    # the pinned client is built, and the dummy loopback base_url would be
+    # rejected, so stub the client factory - the seam the providers actually use.
     orig_resolve = p.resolve_base_url
-    p.httpx.Client = FakeClient
+    orig_client_for = p._client_for
     p.resolve_base_url = lambda spec: "https://example.invalid/v1"
+    p._client_for = lambda spec, base, timeout=None: FakeClient()
     try:
         with pytest.raises(p.ProviderError) as ei:
             p._call_openai_like(spec, "sys", "user")
     finally:
-        p.httpx.Client = orig_client
         p.resolve_base_url = orig_resolve
+        p._client_for = orig_client_for
 
     assert ei.value.category == "output_truncated"
     assert "max_tokens" in ei.value.message
@@ -432,3 +433,167 @@ def test_sysmon_format_fields_are_ingested_and_detected(app_env, client):
         kinds[n["node_type"]] = kinds.get(n["node_type"], 0) + 1
     assert kinds.get("process", 0) >= 1, "process nodes must reach the graph"
     assert kinds.get("user", 0) >= 1, "user nodes must reach the graph"
+
+
+@pytest.mark.parametrize("provider,body", [
+    ("openrouter", {"choices": [{"message": {"content": '{"summary": "cut off mid'},
+                                 "finish_reason": "length"}],
+                    "usage": {"completion_tokens": 2048,
+                              "completion_tokens_details": {"reasoning_tokens": 900}}}),
+    ("anthropic", {"content": [{"type": "text", "text": '{"summary": "cut off mid'}],
+                   "stop_reason": "max_tokens", "usage": {"output_tokens": 2048}}),
+    ("gemini", {"candidates": [{"content": {"parts": [{"text": '{"summary": "cut'}]},
+                                "finishReason": "MAX_TOKENS"}],
+                "usageMetadata": {"total_tokens": 2048}}),
+    ("ollama", {"message": {"content": '{"summary": "cut off mid'},
+                "done_reason": "length", "eval_count": 2048}),
+])
+def test_partial_output_at_token_ceiling_reports_truncation(provider, body):
+    """A reply cut at the token ceiling must say so, not "no JSON object".
+
+    Regression: finish_reason=length with partial text fell through the JSON
+    extractor and surfaced as schema_invalid, hiding that the real cause was
+    max_tokens being too small for a reasoning model.
+    """
+    from sentinelgraph import ai_providers as p
+
+    spec = p.ProviderSpec(provider_type=provider, model_id="m", api_key="k",
+                          max_output_tokens=2048)
+
+    class FakeResp:
+        status_code = 200
+
+        def json(self):
+            return body
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, *a, **k):
+            return FakeResp()
+
+    orig_resolve, orig_client = p.resolve_base_url, p._client_for
+    p.resolve_base_url = lambda s: "https://example.invalid/v1"
+    p._client_for = lambda s, b, timeout=None: FakeClient()
+    try:
+        with pytest.raises(p.ProviderError) as ei:
+            p.DISPATCH[provider](spec, "sys", "user")
+    finally:
+        p.resolve_base_url, p._client_for = orig_resolve, orig_client
+
+    assert ei.value.category == "output_truncated", ei.value.message
+    assert "2048" in ei.value.message
+    assert "raise" in ei.value.message.lower()
+
+
+def test_client_timeout_reports_budget_and_remedy():
+    """A client-side timeout must name the configured budget, not just "timed out".
+
+    Regression: a 50-event incident answering an 8192-token budget exceeded the
+    60 s client timeout and surfaced as "Request timed out. (timeout)" - the
+    operator could not tell whether to raise the timeout or lower max_tokens.
+    """
+    import httpx
+    from sentinelgraph import ai_providers as p
+
+    spec = p.ProviderSpec(provider_type="openrouter", model_id="m", api_key="k",
+                          timeout_s=180, max_output_tokens=8192)
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def post(self, *a, **k):
+            raise httpx.ReadTimeout("simulated")
+
+    orig_resolve, orig_client = p.resolve_base_url, p._client_for
+    p.resolve_base_url = lambda s: "https://example.invalid/v1"
+    p._client_for = lambda s, b, timeout=None: FakeClient()
+    try:
+        res = p.complete(spec, "sys", "user")
+    finally:
+        p.resolve_base_url, p._client_for = orig_resolve, orig_client
+
+    assert res.ok is False
+    assert res.error_category == "timeout"
+    assert "180" in res.error_message
+    assert "raise" in res.error_message.lower()
+    assert "max tokens" in res.error_message.lower()
+
+
+# --------------------------------------------------------------------------
+# AI-assisted report narrative (reporting.generate(use_ai=True))
+# --------------------------------------------------------------------------
+
+def test_report_ai_flag_degrades_cleanly_without_provider(app_env, client, loaded_demo):
+    """use_ai=true with no provider still returns the full deterministic report."""
+    inc = client.get("/api/incidents").json()["incidents"][0]
+    r = client.post(f"/api/incidents/{inc['id']}/report?use_ai=true")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ai"]["status"] == "no_provider"
+    assert "AI-assisted narrative" not in body["content"]
+    assert body["content"].startswith("# Incident Report")
+
+
+def test_report_ai_narrative_is_fenced_and_labelled(app_env, monkeypatch, client, loaded_demo):
+    """Model text is added as a labelled hypothesis; deterministic sections survive."""
+    from sentinelgraph import ai_providers, provider_store
+
+    spec = ai_providers.ProviderSpec(provider_type="openai", model_id="gpt-test",
+                                     api_key="k")
+
+    class _R:
+        ok = True
+        text = "### Executive summary\nA logon burst preceded a successful logon."
+        latency_ms = 12
+        error_category = None
+        error_message = None
+
+    monkeypatch.setattr(provider_store, "active_spec", lambda: (spec, {"id": 1}))
+    monkeypatch.setattr(ai_providers, "complete", lambda *a, **k: _R())
+
+    inc = client.get("/api/incidents").json()["incidents"][0]
+    r = client.post(f"/api/incidents/{inc['id']}/report?use_ai=true")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ai"]["status"] == "ok"
+    content = body["content"]
+    assert "## AI-assisted narrative" in content
+    assert "hypothesis, not evidence" in content
+    assert "## 1. Executive summary" in content  # deterministic body preserved
+    assert content.startswith("# Incident Report")
+
+
+def test_report_ai_failure_keeps_deterministic_report(app_env, monkeypatch, client, loaded_demo):
+    """A provider error must not lose the report; the failure is stated instead."""
+    from sentinelgraph import ai_providers, provider_store
+
+    spec = ai_providers.ProviderSpec(provider_type="openai", model_id="gpt-test",
+                                     api_key="k")
+
+    class _R:
+        ok = False
+        text = ""
+        latency_ms = 5
+        error_category = "auth"
+        error_message = "Authentication failed (HTTP 401)."
+
+    monkeypatch.setattr(provider_store, "active_spec", lambda: (spec, {"id": 1}))
+    monkeypatch.setattr(ai_providers, "complete", lambda *a, **k: _R())
+
+    inc = client.get("/api/incidents").json()["incidents"][0]
+    r = client.post(f"/api/incidents/{inc['id']}/report?use_ai=true")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ai"]["status"] == "error"
+    assert body["ai"]["error_category"] == "auth"
+    assert "AI-assisted narrative" not in body["content"]
+    assert body["content"].startswith("# Incident Report")

@@ -22,6 +22,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
+from . import attack_map
 from .config import get_settings
 
 SCHEMA_VERSION = 1
@@ -132,6 +133,7 @@ CREATE TABLE IF NOT EXISTS rules (
     logic        TEXT NOT NULL,     -- human-readable condition
     severity     TEXT NOT NULL,
     version      TEXT NOT NULL,
+    attack       TEXT NOT NULL DEFAULT '',  -- comma-separated ATT&CK technique IDs
     enabled      INTEGER NOT NULL DEFAULT 1
 );
 
@@ -459,6 +461,23 @@ def get_conn() -> sqlite3.Connection:
         return _conn
 
 
+def fetchone(sql: str, params: tuple = ()) -> sqlite3.Row | None:
+    """Locked single-row read.
+
+    A bare ``get_conn().execute()`` shares the process-wide connection without
+    taking ``_lock``, so two request threads can drive the same sqlite3 object
+    at once and trip ``DatabaseError('not an error')`` / ``SystemError``.
+    """
+    with _lock:
+        return get_conn().execute(sql, params).fetchone()
+
+
+def fetchall(sql: str, params: tuple = ()) -> list[sqlite3.Row]:
+    """Locked multi-row read (see ``fetchone``)."""
+    with _lock:
+        return get_conn().execute(sql, params).fetchall()
+
+
 def reset_connections() -> None:
     """Close the cached connection and forget it. Used by tests between cases."""
     global _conn
@@ -492,6 +511,7 @@ def init_db(conn: sqlite3.Connection | None = None, force: bool = False) -> None
     conn = conn or get_conn()
     try:
         conn.executescript(SCHEMA_SQL)
+        _migrate(conn)
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         if force or version < SCHEMA_VERSION:
             conn.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
@@ -502,16 +522,24 @@ def init_db(conn: sqlite3.Connection | None = None, force: bool = False) -> None
             pass
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Additive migrations for databases created by an older build."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(rules)")}
+    if "attack" not in cols:
+        conn.execute("ALTER TABLE rules ADD COLUMN attack TEXT NOT NULL DEFAULT ''")
+
+
 def _seed_reference(conn: sqlite3.Connection) -> None:
     for rule in RULE_SEED:
         conn.execute(
-            """INSERT INTO rules (id,name,category,description,logic,severity,version,enabled)
-               VALUES (?,?,?,?,?,?,?,1)
+            """INSERT INTO rules (id,name,category,description,logic,severity,version,attack,enabled)
+               VALUES (?,?,?,?,?,?,?,?,1)
                ON CONFLICT(id) DO UPDATE SET
                  name=excluded.name, category=excluded.category,
                  description=excluded.description, logic=excluded.logic,
-                 severity=excluded.severity, version=excluded.version""",
-            rule,
+                 severity=excluded.severity, version=excluded.version,
+                 attack=excluded.attack""",
+            (*rule, attack_map.ids(rule[0])),
         )
 
 

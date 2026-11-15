@@ -39,7 +39,7 @@ $notes = @()
 # [ordered] penting: logika di bawah memakai "field pertama menang", dan
 # hashtable biasa di PowerShell 5.1 tidak menjamin urutan iterasi.
 $FieldMap = [ordered]@{
-  # Sysmon memakai "User" (mis. DESKTOP-X\nainggolan) untuk event proses/jaringan.
+  # Sysmon memakai "User" (mis. DESKTOP-EXAMPLE\analyst) untuk event proses/jaringan.  # PII-SCAN-ALLOW: illustrative placeholder, not a real hostname
   # Nama lain berasal dari Windows Security.
   "User"               = "user_name"
   "TargetUserName"     = "user_name"

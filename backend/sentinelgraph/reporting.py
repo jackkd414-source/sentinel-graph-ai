@@ -10,7 +10,8 @@ import json
 from typing import Any
 
 from .db import cursor, get_conn, rows_to_dicts
-from .security import escape_text, strip_unsafe_html
+from . import ai_providers, attack_map
+from .security import escape_text, redact_secrets, strip_unsafe_html
 from .timeutil import now_iso
 
 
@@ -163,6 +164,9 @@ def build_markdown(data: dict[str, Any]) -> str:
         a(f"- **Severity:** {al['severity']}")
         a(f"- **Rule:** {al.get('rule_name')} v(alerts reference rule catalogue)")
         a(f"- **Reconstructed logic:** `{al.get('rule_logic')}`")
+        tech = attack_map.summary_line(al["rule_id"])
+        if tech:
+            a(f"- **ATT&CK:** {tech}")
         a(f"- **Why it fired:** {al['narrative']}")
         evid = data["alert_evidence"].get(al["id"], [])
         if evid:
@@ -399,10 +403,13 @@ def build_html(data: dict[str, Any]) -> str:
     findings_html = []
     for al in data["alerts"]:
         evid = data["alert_evidence"].get(al["id"], [])
+        tech = attack_map.summary_line(al["rule_id"])
+        tech_html = f"<p class='sev'>ATT&amp;CK: {escape_text(tech)}</p>" if tech else ""
         findings_html.append(
             f"<div class='finding sev-{escape_text(al['severity'])}'>"
             f"<h3>{escape_text(al['rule_id'])} &mdash; {escape_text(al['title'])}</h3>"
             f"<p class='sev'>Severity: {escape_text(al['severity'])}</p>"
+            f"{tech_html}"
             f"<p>{strip_unsafe_html(escape_text(al['narrative']))}</p>"
             f"<p class='evidence'>Supporting events: "
             + ", ".join(f"#{e['id']}" for e in evid) +
@@ -589,16 +596,165 @@ AI-generated text is confined to section 6 and labelled accordingly.
 </div></body></html>"""
 
 
-def generate(incident_id: int, fmt: str = "md", persist: bool = True) -> dict[str, Any]:
+# --------------------------------------------------------------------------
+# AI-assisted narrative (optional)
+# --------------------------------------------------------------------------
+# The deterministic sections above are the report of record. When an operator
+# asks for an AI narrative, the model receives ONLY facts gathered from the
+# database; its output is fenced, labelled and caveated so a reader can never
+# mistake an inference for an observed fact. With no provider configured the
+# deterministic report is returned unchanged.
+
+AI_SYSTEM_PROMPT = (
+    "You are a senior SOC analyst writing the narrative section of a formal "
+    "incident report. You are given deterministic facts extracted from an "
+    "evidence store.\n"
+    "Hard rules:\n"
+    "  * Use ONLY the supplied facts. Never invent hosts, users, IP addresses, "
+    "hashes, timestamps, rule ids or CVE ids.\n"
+    "  * Keep observed facts separate from inference, and label inference.\n"
+    "  * State uncertainty and missing evidence explicitly.\n"
+    "  * Do not speculate about attacker identity or attribution.\n"
+    "  * Plain professional English, markdown only, no code fences.\n"
+    "Headings, in this order: '### Executive summary', '### What the evidence "
+    "shows', '### Most likely attack path', '### Recommended next steps', "
+    "'### Confidence and gaps'."
+)
+
+
+def build_ai_prompt(data: dict[str, Any]) -> str:
+    """Render the gathered facts into a compact prompt. No secrets included."""
+    inc = data["incident"]
+    synthetic = any(a.get("is_synthetic") for a in data["artifacts"])
+    out: list[str] = [
+        f"Incident {inc['ref']}: {inc['title']}",
+        f"Severity {inc['severity']}, status {inc['status']}",
+        f"Observed window (UTC): {inc.get('first_ts') or 'unknown'} -> "
+        f"{inc.get('last_ts') or 'unknown'}",
+        f"Machine summary: {inc.get('summary') or '(none)'}",
+        f"Dataset is synthetic/demo: {'yes' if synthetic else 'no'}",
+        "",
+        f"Findings ({len(data['alerts'])}):",
+    ]
+    for a in data["alerts"]:
+        text = a.get("narrative") or a.get("rule_description") or ""
+        out.append(f"- [{a['severity']}] {a.get('rule_name') or a.get('rule_id')}: {text}".strip())
+    out += ["", f"Evidence events ({len(data['events'])}):"]
+    for ev in data["events"][:60]:
+        bits = [
+            ev.get("ts_utc") or ev.get("ts_raw") or "-",
+            ev.get("host") or "-",
+            ev.get("event_type") or "-",
+            ev.get("command_line") or ev.get("file_path") or ev.get("domain")
+            or ev.get("process_name") or ev.get("action") or "",
+        ]
+        out.append("- " + " | ".join(str(b) for b in bits if b))
+    out += ["", f"Graph relationships ({len(data['edges'])}):"]
+    for e in data["edges"][:60]:
+        out.append(f"- {e.get('src_label')} -[{e.get('relation')}/{e.get('status')}]-> "
+                   f"{e.get('dst_label')}")
+    return "\n".join(out)
+
+
+def _ai_narrative(
+    data: dict[str, Any], spec: ai_providers.ProviderSpec | None,
+) -> tuple[str, dict[str, Any]]:
+    """Ask the active provider for the narrative. Never raises."""
+    if spec is None:
+        return "", {"status": "no_provider",
+                    "message": "No AI provider is configured; the deterministic "
+                               "report was generated without an AI section."}
+    try:
+        result = ai_providers.complete(spec, AI_SYSTEM_PROMPT, build_ai_prompt(data))
+    except Exception as exc:  # adapters normally catch; belt and braces
+        return "", {"status": "error", "error_category": "exception",
+                    "error_message": redact_secrets(str(exc))[:300],
+                    "provider": spec.provider_type, "model": spec.model_id}
+    if not result.ok:
+        return "", {"status": "error", "error_category": result.error_category,
+                    "error_message": redact_secrets(result.error_message)[:300],
+                    "provider": spec.provider_type, "model": spec.model_id}
+    text = (result.text or "").strip()
+    if not text:
+        return "", {"status": "empty",
+                    "message": "The provider returned an empty response."}
+    return text, {"status": "ok", "provider": spec.provider_type,
+                  "model": spec.model_id, "latency_ms": result.latency_ms}
+
+
+def _record_ai_run(project_id: int, incident_id: int, note: dict[str, Any],
+                   chars: int) -> None:
+    """Persist the run for traceability, same shape as analysis runs."""
+    with cursor() as cur:
+        cur.execute(
+            """INSERT INTO ai_runs
+               (project_id,incident_id,task,provider,model,status,latency_ms,
+                result_json,error_category,error_message,created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (project_id, incident_id, "report", note.get("provider"),
+             note.get("model"), note.get("status") or "error", note.get("latency_ms"),
+             json.dumps({"narrative_chars": chars}), note.get("error_category"),
+             note.get("error_message"), now_iso()),
+        )
+
+
+_AI_MD_BANNER = (
+    "## AI-assisted narrative\n\n"
+    "> **Model output - a hypothesis, not evidence.** Generated by {who}. "
+    "Every claim below must be checked against the deterministic sections that "
+    "follow; the evidence store, not the model, is the report of record.\n\n"
+    "{text}\n\n---\n\n"
+)
+
+
+def _inject_ai_md(md: str, text: str, note: dict[str, Any]) -> str:
+    block = _AI_MD_BANNER.format(
+        who=f"`{note.get('provider')} / {note.get('model')}`", text=text)
+    marker = "## 1. Executive summary"
+    return md.replace(marker, block + marker, 1) if marker in md else block + md
+
+
+def _inject_ai_html(doc: str, text: str, note: dict[str, Any]) -> str:
+    who = escape_text(f"{note.get('provider')} / {note.get('model')}")
+    body = escape_text(text).replace("\n", "<br>")
+    section = (
+        '<section class="ai-narrative"><h2>AI-assisted narrative</h2>'
+        "<p><strong>Model output - a hypothesis, not evidence.</strong> "
+        f"Generated by {who}. Check every claim against the deterministic "
+        "sections of this report.</p>"
+        f"<div>{body}</div></section>"
+    )
+    return doc.replace("</body>", section + "</body>", 1)
+
+
+def generate(incident_id: int, fmt: str = "md", persist: bool = True,
+             use_ai: bool = False,
+             spec: ai_providers.ProviderSpec | None = None) -> dict[str, Any]:
+    """Build a report. ``use_ai`` adds a clearly fenced model narrative."""
     data = gather(incident_id)
+    note: dict[str, Any] | None = None
+    ai_text = ""
+    if use_ai:
+        ai_text, note = _ai_narrative(data, spec)
+
     if fmt == "md":
         content = build_markdown(data)
+        if ai_text:
+            content = _inject_ai_md(content, ai_text, note or {})
     elif fmt == "html":
         content = build_html(data)
+        if ai_text:
+            content = _inject_ai_html(content, ai_text, note or {})
     elif fmt == "json":
-        content = json.dumps(build_json_report(data), indent=2, ensure_ascii=False)
+        payload = build_json_report(data)
+        if note is not None:
+            payload["ai_narrative"] = {"text": ai_text, **note}
+        content = json.dumps(payload, indent=2, ensure_ascii=False)
     else:
         raise ValueError(f"Unsupported format: {fmt}")
+
+    if use_ai and note is not None:
+        _record_ai_run(data["incident"]["project_id"], incident_id, note, len(ai_text))
 
     if persist:
         with cursor() as cur:
@@ -611,4 +767,4 @@ def generate(incident_id: int, fmt: str = "md", persist: bool = True) -> dict[st
         report_id = None
 
     return {"id": report_id, "fmt": fmt, "content": content,
-            "incident_ref": data["incident"]["ref"]}
+            "incident_ref": data["incident"]["ref"], "ai": note}

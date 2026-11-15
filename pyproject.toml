@@ -1,0 +1,12 @@
+# Tool configuration only (no build backend): SentinelGraph is run from source.
+# This makes `python -m pytest` the canonical test command with no env setup:
+# `pythonpath` puts backend/ on sys.path so `import sentinelgraph` works.
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+addopts = "-q"
+filterwarnings = [
+    # FastAPI's @app.on_event is deprecated but still functional on 0.162.
+    "ignore::DeprecationWarning",
+]

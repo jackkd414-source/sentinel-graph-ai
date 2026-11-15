@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import io
 import json
 from pathlib import Path
@@ -12,10 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 
-from . import ai_analysis, ai_providers, correlation, demo_data, reporting
+from . import ai_analysis, ai_providers, attack_map, correlation, demo_data, reporting
 from . import provider_store as store
-from .config import get_settings
-from .db import cursor, get_conn, init_db, rows_to_dicts, seed_iocs
+from .bodylimit import BodyLimitMiddleware
+from .config import enforce_secure_binding, get_settings
+from .db import (
+    cursor, db_lock, fetchall, fetchone, get_conn, init_db, rows_to_dicts, seed_iocs,
+)
 from .ingest import (
     AdapterError,
     ParseResult,
@@ -39,32 +43,90 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    # Authorization must be in the allowlist or the browser strips the bearer
+    # token from cross-origin requests and every authenticated call fails.
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+
+@app.middleware("http")
+async def _require_auth(request, call_next):
+    """Shared-secret bearer check, active only when SG_AUTH_TOKEN is set.
+
+    Default operation is localhost-only with no token, so this is a no-op for
+    the normal single-analyst setup. If the operator exposes the API on a
+    routable interface they must set SG_AUTH_TOKEN (enforced at startup), and
+    this guard then protects every route except the unauthenticated health probe.
+    CORS is deliberately not treated as authentication.
+    """
+    # CORS preflight must never be blocked by authentication: the browser does
+    # not attach the bearer token to an OPTIONS probe. Hand it to CORSMiddleware,
+    # which answers preflight itself and never forwards OPTIONS to a route
+    # handler, so it cannot read data or mutate state.
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    token = settings.auth_token
+    if token:
+        path = request.url.path
+        if path.startswith("/api/") and path != "/api/health":
+            provided = request.headers.get("authorization", "")
+            if not hmac.compare_digest(provided, f"Bearer {token}"):
+                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+    return await call_next(request)
+
+
+# Outermost middleware: refuse an oversized body before CORS, auth or any
+# parser (multipart/JSON) can read or spool it. Added last => runs first.
+app.add_middleware(
+    BodyLimitMiddleware, max_bytes=lambda: settings.max_request_bytes,
 )
 
 
 @app.on_event("startup")
 def _startup() -> None:
+    # Refuse to run an unauthenticated server bound to a routable interface.
+    enforce_secure_binding(settings.host, settings.auth_token)
     init_db()
     _ensure_default_project()
 
 
 def _ensure_default_project() -> int:
+    """Return the single default project, creating it exactly once.
+
+    The original code did SELECT-then-INSERT with no lock, so two concurrent
+    first requests both saw "no row" and both inserted, tripping
+    ``UNIQUE constraint failed: projects.name``. The whole check-and-create is
+    now serialised under db_lock() and the insert is conflict-tolerant, so a
+    racing writer (or a second process) cannot produce a duplicate or an error.
+    """
     conn = get_conn()
-    row = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
-    if row:
-        return row["id"]
-    now = now_iso()
-    with cursor() as cur:
-        cur.execute(
-            "INSERT INTO projects (name,description,is_demo,created_at,updated_at) VALUES (?,?,?,?,?)",
-            ("Kartika Demo Workspace",
-             "Default workspace for the SentinelGraph AI demonstration dataset.",
-             0, now, now),
-        )
-        pid = cur.lastrowid
-    seed_iocs(conn, pid)
-    return pid
+    with db_lock():
+        row = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
+        if row:
+            return row["id"]
+        now = now_iso()
+        with cursor() as cur:
+            cur.execute(
+                "INSERT INTO projects (name,description,is_demo,created_at,updated_at) "
+                "VALUES (?,?,?,?,?) ON CONFLICT(name) DO NOTHING",
+                ("Kartika Demo Workspace",
+                 "Default workspace for the SentinelGraph AI demonstration dataset.",
+                 0, now, now),
+            )
+        # Re-read rather than trusting lastrowid: ON CONFLICT DO NOTHING leaves
+        # lastrowid stale when another writer won the race.
+        row = conn.execute(
+            "SELECT id FROM projects WHERE name=? ORDER BY id LIMIT 1",
+            ("Kartika Demo Workspace",),
+        ).fetchone()
+        if not row:
+            row = conn.execute("SELECT id FROM projects ORDER BY id LIMIT 1").fetchone()
+        if not row:
+            raise RuntimeError("default project could not be created or found")
+        pid = row["id"]
+        seed_iocs(conn, pid)
+        return pid
 
 
 def _audit(action: str, target: str | None = None, detail: str | None = None,
@@ -79,7 +141,7 @@ def _audit(action: str, target: str | None = None, detail: str | None = None,
 def _project(project_id: int | None) -> int:
     if project_id is None:
         return _ensure_default_project()
-    row = get_conn().execute("SELECT id FROM projects WHERE id=?", (project_id,)).fetchone()
+    row = fetchone("SELECT id FROM projects WHERE id=?", (project_id,))
     if not row:
         raise HTTPException(404, "Project not found")
     return row["id"]
@@ -108,8 +170,8 @@ def health() -> dict[str, Any]:
 
 @app.get("/api/projects")
 def list_projects() -> dict[str, Any]:
-    rows = rows_to_dicts(get_conn().execute(
-        "SELECT * FROM projects ORDER BY id").fetchall())
+    rows = rows_to_dicts(fetchall(
+        "SELECT * FROM projects ORDER BY id"))
     return {"projects": rows}
 
 
@@ -118,6 +180,36 @@ def list_projects() -> dict[str, Any]:
 # ==========================================================================
 
 SUPPORTED_SUFFIXES = {".json", ".jsonl", ".ndjson", ".log", ".txt", ".csv"}
+
+# Read uploads in bounded chunks so a single oversized request cannot buffer the
+# whole body into memory before the size check runs.
+UPLOAD_CHUNK_BYTES = 64 * 1024
+
+
+async def _read_upload_bounded(file: UploadFile, limit: int) -> bytes:
+    """Read an upload in bounded chunks and refuse to buffer past ``limit``.
+
+    The previous implementation called ``await file.read()`` first and checked
+    the size afterwards, so a large upload was fully materialised in RAM (and
+    in any spool) before it was rejected. We now stop at the first chunk that
+    would cross the limit; nothing partial is ever kept or stored.
+    """
+    buf = bytearray()
+    try:
+        while True:
+            chunk = await file.read(UPLOAD_CHUNK_BYTES)
+            if not chunk:
+                break
+            if len(buf) + len(chunk) > limit:
+                raise HTTPException(
+                    413,
+                    f"File exceeds the {limit // (1024 * 1024)} MiB limit.",
+                )
+            buf.extend(chunk)
+    finally:
+        # Always release the spooled temp file, even on the reject path.
+        await file.close()
+    return bytes(buf)
 
 
 class IngestTextRequest(BaseModel):
@@ -167,6 +259,12 @@ def ingest_text(req: IngestTextRequest) -> dict[str, Any]:
     pid = _project(req.project_id)
     if not req.text.strip():
         raise HTTPException(400, "No data supplied.")
+    text_bytes = len(req.text.encode("utf-8"))
+    if text_bytes > settings.max_upload_bytes:
+        raise HTTPException(
+            413,
+            f"Text exceeds the {settings.max_upload_bytes // (1024 * 1024)} MiB limit.",
+        )
     fmt = _detect_format(req.filename, req.text)
     parsed = _parse(req.text, fmt, req.filename)
 
@@ -218,11 +316,7 @@ async def ingest_file(
             f"Unsupported file type '{suffix}'. Supported: {', '.join(sorted(SUPPORTED_SUFFIXES))}",
         )
 
-    raw = await file.read()
-    if len(raw) > settings.max_upload_bytes:
-        raise HTTPException(
-            413, f"File exceeds the {settings.max_upload_bytes // (1024 * 1024)} MiB limit."
-        )
+    raw = await _read_upload_bounded(file, settings.max_upload_bytes)
     if not raw:
         raise HTTPException(400, "Uploaded file is empty.")
 
@@ -367,9 +461,9 @@ def load_demo(project_id: int | None = Query(None),
 @app.get("/api/artifacts")
 def list_artifacts(project_id: int | None = None) -> dict[str, Any]:
     pid = _project(project_id)
-    rows = rows_to_dicts(get_conn().execute(
+    rows = rows_to_dicts(fetchall(
         "SELECT * FROM artifacts WHERE project_id=? ORDER BY imported_at DESC", (pid,)
-    ).fetchall())
+    ))
     return {"artifacts": rows}
 
 
@@ -520,12 +614,12 @@ def event_facets(project_id: int | None = None) -> dict[str, Any]:
 @app.get("/api/alerts")
 def list_alerts(project_id: int | None = None, limit: int = Query(200, ge=1, le=1000)) -> dict[str, Any]:
     pid = _project(project_id)
-    rows = rows_to_dicts(get_conn().execute(
+    rows = rows_to_dicts(fetchall(
         "SELECT * FROM alerts WHERE project_id=? "
         "ORDER BY CASE severity WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
         "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END DESC, first_ts DESC LIMIT ?",
         (pid, limit),
-    ).fetchall())
+    ))
     for r in rows:
         r["evidence"] = _alert_evidence(r["id"])
         r["evidence_event_ids"] = [e["id"] for e in r["evidence"]]
@@ -538,11 +632,11 @@ def _alert_evidence(alert_id: int) -> list[dict[str, Any]]:
     Both /api/alerts and /api/incidents/{id} expose the same shape so the
     frontend never has to branch on which endpoint it called.
     """
-    return rows_to_dicts(get_conn().execute(
+    return rows_to_dicts(fetchall(
         "SELECT e.* FROM events e JOIN alert_events ae ON ae.event_id = e.id "
         "WHERE ae.alert_id = ? ORDER BY e.ts_utc IS NULL, e.ts_utc, e.id",
         (alert_id,),
-    ).fetchall())
+    ))
 
 
 @app.get("/api/incidents")
@@ -683,13 +777,18 @@ def node_detail(node_id: int) -> dict[str, Any]:
 
 @app.get("/api/rules")
 def list_rules() -> dict[str, Any]:
-    rows = rows_to_dicts(get_conn().execute("SELECT * FROM rules ORDER BY id").fetchall())
+    rows = rows_to_dicts(fetchall("SELECT * FROM rules ORDER BY id"))
+    for r in rows:
+        r["attack"] = attack_map.techniques(r["id"])
+        note = attack_map.note(r["id"])
+        if note:
+            r["attack_note"] = note
     return {"rules": rows}
 
 
 @app.patch("/api/rules/{rule_id}")
 def toggle_rule(rule_id: str, enabled: bool = Body(..., embed=True)) -> dict[str, Any]:
-    row = get_conn().execute("SELECT id FROM rules WHERE id=?", (rule_id,)).fetchone()
+    row = fetchone("SELECT id FROM rules WHERE id=?", (rule_id,))
     if not row:
         raise HTTPException(404, "Rule not found")
     with cursor() as cur:
@@ -721,7 +820,8 @@ def ai_status() -> dict[str, Any]:
 def list_providers() -> dict[str, Any]:
     return {"configs": store.list_configs(),
             "types": ai_providers.PROVIDER_TYPES,
-            "encryption_available": store._cipher.available}
+            "encryption_available": store._cipher.available,
+            "credential_storage": store._cipher.storage_info()}
 
 
 class ProviderCreate(BaseModel):
@@ -852,7 +952,7 @@ def test_unsaved(body: dict[str, Any] = Body(...)) -> dict[str, Any]:
 
 @app.post("/api/incidents/{incident_id}/analyze")
 def analyze_incident(incident_id: int, task: str = Query("summarize")) -> dict[str, Any]:
-    if not get_conn().execute("SELECT id FROM incidents WHERE id=?", (incident_id,)).fetchone():
+    if not fetchone("SELECT id FROM incidents WHERE id=?", (incident_id,)):
         raise HTTPException(404, "Incident not found")
     spec, row = store.active_spec()
     if spec is not None and not spec.api_key and \
@@ -880,23 +980,32 @@ def incident_ai_runs(incident_id: int) -> dict[str, Any]:
 # ==========================================================================
 
 @app.post("/api/incidents/{incident_id}/report")
-def create_report(incident_id: int, fmt: str = Query("md", pattern="^(md|json|html)$")) -> dict[str, Any]:
-    if not get_conn().execute("SELECT id FROM incidents WHERE id=?", (incident_id,)).fetchone():
+def create_report(incident_id: int, fmt: str = Query("md", pattern="^(md|json|html)$"),
+                  use_ai: bool = False) -> dict[str, Any]:
+    if not fetchone("SELECT id FROM incidents WHERE id=?", (incident_id,)):
         raise HTTPException(404, "Incident not found")
+    spec = None
+    if use_ai:
+        spec, _ = store.active_spec()
     try:
-        rep = reporting.generate(incident_id, fmt)
+        rep = reporting.generate(incident_id, fmt, use_ai=use_ai, spec=spec)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    _audit("report_generate", str(incident_id), f"fmt={fmt}")
+    _audit("report_generate", str(incident_id),
+           f"fmt={fmt} ai={use_ai} ai_status={(rep.get('ai') or {}).get('status')}")
     return rep
 
 
 @app.get("/api/incidents/{incident_id}/report")
-def download_report(incident_id: int, fmt: str = Query("md", pattern="^(md|json|html)$")) -> Response:
-    if not get_conn().execute("SELECT id FROM incidents WHERE id=?", (incident_id,)).fetchone():
+def download_report(incident_id: int, fmt: str = Query("md", pattern="^(md|json|html)$"),
+                    use_ai: bool = False) -> Response:
+    if not fetchone("SELECT id FROM incidents WHERE id=?", (incident_id,)):
         raise HTTPException(404, "Incident not found")
+    spec = None
+    if use_ai:
+        spec, _ = store.active_spec()
     try:
-        rep = reporting.generate(incident_id, fmt, persist=False)
+        rep = reporting.generate(incident_id, fmt, persist=False, use_ai=use_ai, spec=spec)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
@@ -913,11 +1022,11 @@ def download_report(incident_id: int, fmt: str = Query("md", pattern="^(md|json|
 @app.get("/api/reports")
 def list_reports(project_id: int | None = None) -> dict[str, Any]:
     pid = _project(project_id)
-    rows = rows_to_dicts(get_conn().execute(
+    rows = rows_to_dicts(fetchall(
         """SELECT r.id, r.incident_id, r.fmt, r.created_at, i.ref
            FROM reports r JOIN incidents i ON i.id=r.incident_id
            WHERE r.project_id=? ORDER BY r.id DESC LIMIT 100""", (pid,)
-    ).fetchall())
+    ))
     return {"reports": rows}
 
 
@@ -927,8 +1036,8 @@ def list_reports(project_id: int | None = None) -> dict[str, Any]:
 
 @app.get("/api/audit")
 def list_audit(limit: int = Query(100, ge=1, le=500)) -> dict[str, Any]:
-    rows = rows_to_dicts(get_conn().execute(
-        "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall())
+    rows = rows_to_dicts(fetchall(
+        "SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (limit,)))
     return {"entries": rows}
 
 
@@ -939,7 +1048,10 @@ def list_audit(limit: int = Query(100, ge=1, le=500)) -> dict[str, Any]:
 if settings.static_dir.is_dir():
     @app.get("/")
     def index() -> FileResponse:
-        return FileResponse(settings.static_dir / "index.html")
+        # Never let the shell be cached: index.html names the hashed bundle, so a
+        # stale copy silently keeps serving an old UI after a rebuild.
+        return FileResponse(settings.static_dir / "index.html",
+                            headers={"Cache-Control": "no-store, must-revalidate"})
 
     @app.get("/assets/{path:path}")
     def assets(path: str) -> FileResponse:
@@ -958,4 +1070,5 @@ if settings.static_dir.is_dir():
         candidate = (settings.static_dir / path).resolve()
         if settings.static_dir.resolve() in candidate.parents and candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(settings.static_dir / "index.html")
+        return FileResponse(settings.static_dir / "index.html",
+                            headers={"Cache-Control": "no-store, must-revalidate"})

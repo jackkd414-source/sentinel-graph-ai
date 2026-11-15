@@ -527,3 +527,14 @@ def test_concurrent_analyze_does_not_corrupt_graph(app_env, client, project_id):
     graph = client.get("/api/graph").json()
     keys = [n["node_key"] for n in graph["nodes"]]
     assert len(keys) == len(set(keys)), "duplicate node_key after concurrent analyze"
+
+
+def test_spa_shell_is_not_cached(client):
+    """index.html names the hashed bundle, so caching it keeps serving old UI.
+
+    Regression: after a rebuild the browser reused a cached shell and the user
+    kept seeing a pre-fix screen while the API already returned fixed results.
+    """
+    r = client.get("/")
+    assert r.status_code == 200
+    assert "no-store" in r.headers.get("cache-control", "").lower()

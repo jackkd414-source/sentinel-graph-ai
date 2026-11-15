@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from . import demo_data
@@ -23,12 +24,21 @@ from .timeutil import now_iso
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
+    from .config import enforce_secure_binding, is_loopback_host
+
     s = get_settings()
-    print(f"SentinelGraph AI  ->  http://{args.host or s.host}:{args.port or s.port}")
+    host = args.host or s.host
+    # Fail before uvicorn binds: never expose an unauthenticated API off-host.
+    enforce_secure_binding(host, s.auth_token)
+    if not is_loopback_host(host):
+        os.environ["SG_HOST"] = host  # let the app's own startup guard agree
+    print(f"SentinelGraph AI  ->  http://{host}:{args.port or s.port}")
+    if not is_loopback_host(host):
+        print("  auth    : SG_AUTH_TOKEN required on every /api request")
     print(f"  database : {s.db_path}")
     print("  AI mode  : " + ("provider configured" if s.master_key else
                               "core-only until a provider is configured"))
-    uvicorn.run("sentinelgraph.api:app", host=args.host or s.host,
+    uvicorn.run("sentinelgraph.api:app", host=host,
                 port=args.port or s.port, reload=args.reload, log_level="info")
     return 0
 

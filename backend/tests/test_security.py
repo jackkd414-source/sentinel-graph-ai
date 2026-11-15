@@ -70,17 +70,37 @@ def test_redact_preserves_ordinary_text():
 # --------------------------------------------------------------------------
 
 @pytest.mark.parametrize("url", [
-    "http://169.254.169.254/latest/meta-data/",
-    "http://127.0.0.1:8080/v1",
-    "http://10.0.0.5/v1",
-    "http://192.168.1.10/v1",
-    "http://[::1]/v1",
-    "http://172.16.0.1/v1",
-    "http://0.0.0.0/v1",
+    "http://169.254.169.254/latest/meta-data/",   # cloud metadata
+    "http://127.0.0.1:8080/v1",                    # IPv4 localhost
+    "http://10.0.0.5/v1",                          # private
+    "http://192.168.1.10/v1",                      # private
+    "http://172.16.0.1/v1",                        # private
+    "http://0.0.0.0/v1",                           # unspecified
+    "http://[::1]/v1",                             # IPv6 localhost
+    "http://[fe80::1]/v1",                         # IPv6 link-local
+    "http://[fc00::1]/v1",                         # IPv6 unique-local
+    # --- the reported bypass: IPv4-mapped IPv6 ------------------------------
+    "http://[::ffff:127.0.0.1]:8088/v1",           # mapped localhost
+    "http://[::ffff:10.0.0.5]/v1",                 # mapped private
+    "http://[::ffff:169.254.169.254]/v1",          # mapped metadata
+    # --- other IPv6 transition formats that embed an IPv4 address -----------
+    "http://[2002:7f00:1::]/v1",                   # 6to4 -> 127.0.0.1
+    "http://[2002:a9fe:a9fe::]/v1",                # 6to4 -> 169.254.169.254
 ])
 def test_ssrf_blocks_internal_addresses(url):
     with pytest.raises(SSRFError):
         validate_provider_url(url, "custom_openai")
+    with pytest.raises(SSRFError):
+        validate_provider_url(url, "custom_openai", allow_private=True)
+
+
+def test_ssrf_blocks_address_normalisation_is_not_string_matching():
+    """A mapped address must be recognised by value, not by how it is spelled."""
+    from sentinelgraph import security
+    import ipaddress
+    assert security._is_blocked_address(ipaddress.ip_address("::ffff:127.0.0.1")) is True
+    assert security._is_blocked_address(ipaddress.ip_address("::ffff:8.8.8.8")) is False
+    assert security._is_blocked_address(ipaddress.ip_address("::ffff:10.0.0.1")) is True
 
 
 @pytest.mark.parametrize("url", [
@@ -99,20 +119,112 @@ def test_ssrf_blocks_embedded_credentials():
         validate_provider_url("https://user:pass@api.example.com/v1", "custom_openai")
 
 
-def test_ssrf_allows_public_https():
-    # api.openai.com resolves publicly; this asserts the guard is not blanket-deny
+def test_ssrf_allows_public_https(monkeypatch):
+    """The guard must not be blanket-deny, checked without live DNS.
+
+    The original test resolved api.openai.com at run time, so it failed offline
+    and could not be reproduced deterministically. Mocking the resolver keeps
+    the same assertion with no network dependency.
+    """
+    from sentinelgraph import security
+    monkeypatch.setattr(security, "_resolve_host", lambda host: ["104.18.6.192"])
     url = validate_provider_url("https://api.openai.com/v1", "openai")
     assert url == "https://api.openai.com/v1"
+
+
+def test_ssrf_fails_closed_when_host_does_not_resolve(monkeypatch):
+    from sentinelgraph import security
+    monkeypatch.setattr(security, "_resolve_host", lambda host: [])
+    with pytest.raises(SSRFError):
+        validate_provider_url("https://no-such-host.invalid/v1", "custom_openai")
+
+
+def test_ssrf_blocks_when_dns_returns_private_address(monkeypatch):
+    """A public-looking name resolving to an internal address must be rejected."""
+    from sentinelgraph import security
+    monkeypatch.setattr(security, "_resolve_host", lambda host: ["10.0.0.7"])
+    with pytest.raises(SSRFError):
+        validate_provider_url("https://rebind.example/v1", "custom_openai")
+
+
+def test_ssrf_blocks_when_dns_returns_mapped_private_address(monkeypatch):
+    from sentinelgraph import security
+    monkeypatch.setattr(security, "_resolve_host", lambda host: ["::ffff:169.254.169.254"])
+    with pytest.raises(SSRFError):
+        validate_provider_url("https://rebind.example/v1", "custom_openai")
+
+
+def test_ssrf_dns_rebinding_pins_the_verified_address(monkeypatch):
+    """After a host is validated to a public IP, a later re-resolution to an
+    internal IP must not be used: the transport connects to the pinned one."""
+    import httpx
+    from sentinelgraph import security
+
+    monkeypatch.setattr(security, "_resolve_host", lambda host: ["93.184.216.34"])
+    url, pinned = security.validate_and_resolve("http://rebind.example/v1", "custom_openai")
+    assert pinned == "93.184.216.34"
+
+    # Attacker flips DNS to loopback between validation and connect.
+    monkeypatch.setattr(security, "_resolve_host", lambda host: ["127.0.0.1"])
+
+    captured: dict[str, str] = {}
+    original = httpx.HTTPTransport.handle_request
+
+    def fake(self, request):  # noqa: ANN001
+        captured["url"] = str(request.url)
+        captured["host"] = request.headers.get("host", "")
+        raise httpx.ConnectError("stop here")
+
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", fake)
+    transport = security.PinnedHTTPTransport("rebind.example", pinned)
+    with pytest.raises(httpx.ConnectError):
+        transport.handle_request(httpx.Request("GET", "http://rebind.example/v1/models"))
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", original)
+
+    assert captured["url"].startswith("http://93.184.216.34"), captured
+    assert "127.0.0.1" not in captured["url"]
+    assert captured["host"] == "rebind.example"
+
+
+def test_ssrf_transport_refuses_host_change(monkeypatch):
+    """If the request host is not the one we validated, refuse to connect."""
+    import httpx
+    from sentinelgraph import security
+    req = httpx.Request("GET", "http://evil.example/v1")
+    with pytest.raises(httpx.TransportError):
+        security._rewrite_to_pinned(req, "rebind.example", "93.184.216.34")
+
+
+def test_ssrf_pinned_client_does_not_follow_redirects(monkeypatch):
+    import httpx
+    from sentinelgraph import security
+    monkeypatch.setattr(security, "_resolve_host", lambda host: ["93.184.216.34"])
+    client = security.open_pinned_client("https://redirect.example/v1", "custom_openai")
+    assert client.follow_redirects is False
+    assert isinstance(client._transport, security.PinnedHTTPTransport)
+    client.close()
 
 
 def test_ssrf_allows_local_ollama_loopback():
     url = validate_provider_url("http://127.0.0.1:11434", "ollama", allow_private=True)
     assert url.endswith("11434")
+    assert validate_provider_url("http://localhost:11434", "ollama", allow_private=True)
+
+
+def test_ssrf_ollama_exception_is_loopback_only():
+    # The intentional Ollama exception must not open a door to any private host.
+    with pytest.raises(SSRFError):
+        validate_provider_url("http://10.0.0.9:11434", "ollama", allow_private=True)
+    with pytest.raises(SSRFError):
+        validate_provider_url("http://192.168.1.50:11434", "ollama", allow_private=True)
 
 
 def test_ssrf_still_blocks_loopback_for_non_local_provider():
     with pytest.raises(SSRFError):
         validate_provider_url("http://127.0.0.1:11434", "custom_openai")
+    # allow_private only relaxes the guard for the local runtime, not others.
+    with pytest.raises(SSRFError):
+        validate_provider_url("http://127.0.0.1:11434", "custom_openai", allow_private=True)
 
 
 # --------------------------------------------------------------------------
@@ -146,13 +258,46 @@ def test_sanitizer_escapes_iframe():
 # Provider config API: secrets must never leave the server
 # --------------------------------------------------------------------------
 
-def test_provider_creation_refused_without_master_key(client):
+def test_provider_key_persisted_encrypted_without_env_master_key(client, app_env):
+    """With no SG_MASTER_KEY a key is provisioned next to the DB, so saving works.
+
+    The secret must still be encrypted at rest and must never be echoed back.
+    """
+    secret = "sk-should-never-be-stored-in-plaintext-3456"
     r = client.post("/api/ai/providers", json={
         "name": "test", "provider_type": "openai", "model_id": "gpt-4o-mini",
-        "api_key": "sk-should-not-be-stored-in-plaintext",
+        "api_key": secret,
+    })
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert secret not in r.text
+    assert body["secret_source"] == "db"
+    assert body["credential_configured"] is True
+    assert secret not in (body.get("credential_hint") or "")
+
+    import sqlite3
+
+    conn = sqlite3.connect(app_env["db_path"])
+    secret_enc, source = conn.execute(
+        "SELECT secret_enc, secret_source FROM provider_configs").fetchone()
+    conn.close()
+    assert source == "db"
+    assert secret_enc and secret_enc.startswith("gAAAAA")  # Fernet token
+    assert secret not in secret_enc
+    assert secret.encode() not in app_env["db_path"].read_bytes()
+
+
+def test_provider_creation_refused_when_master_key_unavailable(client, monkeypatch):
+    """Fail closed: with no usable key the secret is refused, never stored plaintext."""
+    from sentinelgraph import provider_store
+
+    monkeypatch.setattr(provider_store._cipher, "_fernet", None)
+    r = client.post("/api/ai/providers", json={
+        "name": "test", "provider_type": "openai", "model_id": "gpt-4o-mini",
+        "api_key": "sk-should-not-be-stored-1234",
     })
     assert r.status_code == 400
-    assert "SG_MASTER_KEY" in r.json()["detail"]
+    assert "master key" in r.json()["detail"].lower()
 
 
 def test_provider_created_with_master_key_never_returns_secret(app_env, monkeypatch):

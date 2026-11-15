@@ -18,7 +18,7 @@ from typing import Any
 import httpx
 
 from .config import env_provider_keys, get_settings
-from .security import redact_secrets, validate_provider_url
+from .security import open_pinned_client, redact_secrets, validate_provider_url
 
 PROVIDER_TYPES = {
     "openai": {
@@ -69,7 +69,7 @@ PROVIDER_TYPES = {
 # emit any visible text, so the ceiling needs headroom above the JSON we want.
 MAX_OUTPUT_TOKENS_DEFAULT = 8192
 MAX_CONTEXT_CHARS = 24000      # hard ceiling on what we will ever send
-REQUEST_TIMEOUT_DEFAULT = 60
+REQUEST_TIMEOUT_DEFAULT = 120
 
 
 @dataclass
@@ -108,6 +108,35 @@ class ProviderError(Exception):
 # helpers
 # --------------------------------------------------------------------------
 
+_TRUNCATED_FINISH = {"length", "max_tokens", "MAX_TOKENS", "max_output_tokens"}
+
+
+def _guard_truncation(spec: ProviderSpec, finish: str | None, usage: dict | None) -> None:
+    """Fail loudly when the provider stopped at the token ceiling.
+
+    A reply cut mid-JSON is not a schema problem. Reporting it as "no JSON
+    object" sent the operator hunting a phantom formatting bug; the real fix is
+    a bigger max_tokens. Named separately so every adapter reports it alike.
+    """
+    if finish not in _TRUNCATED_FINISH:
+        return
+    usage = usage or {}
+    used = (usage.get("completion_tokens") or usage.get("output_tokens")
+            or usage.get("eval_count") or usage.get("total_tokens"))
+    hidden = (usage.get("completion_tokens_details") or {}).get("reasoning_tokens")
+    detail = ""
+    if used:
+        detail = f" ({used} completion tokens" + (
+            f", {hidden} spent on hidden reasoning" if hidden else "") + ")"
+    raise ProviderError(
+        "output_truncated",
+        f"{spec.provider_type} stopped at the {spec.max_output_tokens or 'configured'}"
+        f"-token ceiling{detail}; the reply is incomplete and was discarded. "
+        f"Raise the max tokens for this provider (or use a non-reasoning model) "
+        f"and retry.",
+    )
+
+
 def _classify_http(status: int, body: str) -> ProviderError:
     text = (body or "")[:800]
     low = text.lower()
@@ -126,9 +155,17 @@ def _classify_http(status: int, body: str) -> ProviderError:
     return ProviderError("unexpected", f"Unexpected HTTP {status}.")
 
 
-def _net_error(exc: Exception) -> ProviderError:
+def _net_error(exc: Exception, spec: ProviderSpec | None = None) -> ProviderError:
     if isinstance(exc, httpx.TimeoutException):
-        return ProviderError("timeout", "Request timed out.")
+        if spec is None:
+            return ProviderError("timeout", "Request timed out.")
+        return ProviderError(
+            "timeout",
+            f"{spec.provider_type} did not answer within the {spec.timeout_s}s client "
+            f"timeout; generation was aborted. Reasoning models answering a large "
+            f"max_tokens budget need longer - raise the timeout for this provider "
+            f"(or lower max tokens) and retry.",
+        )
     if isinstance(exc, httpx.ConnectError):
         return ProviderError("network", "Could not connect to the provider endpoint.")
     return ProviderError("network", f"Network error: {type(exc).__name__}.")
@@ -143,6 +180,20 @@ def resolve_base_url(spec: ProviderSpec) -> str:
     url = (spec.base_url or default).rstrip("/")
     validate_provider_url(url, spec.provider_type, allow_private=spec.allow_private)
     return url
+
+
+def _client_for(spec: ProviderSpec, base: str, timeout: float | None = None) -> httpx.Client:
+    """HTTP client pinned to the validated address of ``base``.
+
+    Reuses the SSRF validation (so the address it will connect to is the one
+    that passed the check) and never follows redirects.
+    """
+    return open_pinned_client(
+        base,
+        spec.provider_type,
+        allow_private=spec.allow_private,
+        timeout=timeout if timeout is not None else spec.timeout_s,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -170,7 +221,7 @@ def _call_openai_like(spec: ProviderSpec, system: str, user: str) -> CallResult:
         payload["max_tokens"] = spec.max_output_tokens
 
     t0 = time.perf_counter()
-    with httpx.Client(timeout=spec.timeout_s, follow_redirects=False) as client:
+    with _client_for(spec, base) as client:
         resp = client.post(f"{base}/chat/completions", headers=headers, json=payload)
     latency = int((time.perf_counter() - t0) * 1000)
 
@@ -200,6 +251,7 @@ def _call_openai_like(spec: ProviderSpec, system: str, user: str) -> CallResult:
             f"Model hit the {budget}-token max_tokens limit before producing any "
             f"content;{detail}. Raise max_tokens for this provider or use a "
             f"non-reasoning model.")
+    _guard_truncation(spec, finish, usage)
 
     return CallResult(
         ok=True, text=text, latency_ms=latency, model=spec.model_id,
@@ -227,7 +279,7 @@ def _call_anthropic(spec: ProviderSpec, system: str, user: str) -> CallResult:
         payload["max_tokens"] = spec.max_output_tokens
 
     t0 = time.perf_counter()
-    with httpx.Client(timeout=spec.timeout_s, follow_redirects=False) as client:
+    with _client_for(spec, base) as client:
         resp = client.post(f"{base}/messages", headers=headers, json=payload)
     latency = int((time.perf_counter() - t0) * 1000)
 
@@ -242,8 +294,12 @@ def _call_anthropic(spec: ProviderSpec, system: str, user: str) -> CallResult:
         raise ProviderError("invalid_response",
                             f"Provider returned an unexpected body shape ({type(exc).__name__}).")
 
+    finish = data.get("stop_reason")
+    usage = data.get("usage") or {}
+    _guard_truncation(spec, finish, usage)
+
     return CallResult(ok=True, text=text, latency_ms=latency, model=spec.model_id,
-                      provider="anthropic", usage=data.get("usage") or {})
+                      provider="anthropic", usage=usage)
 
 
 def _call_gemini(spec: ProviderSpec, system: str, user: str) -> CallResult:
@@ -262,7 +318,7 @@ def _call_gemini(spec: ProviderSpec, system: str, user: str) -> CallResult:
         payload["generationConfig"]["maxOutputTokens"] = spec.max_output_tokens
 
     t0 = time.perf_counter()
-    with httpx.Client(timeout=spec.timeout_s, follow_redirects=False) as client:
+    with _client_for(spec, base) as client:
         resp = client.post(url, headers=headers, json=payload)
     latency = int((time.perf_counter() - t0) * 1000)
 
@@ -277,6 +333,8 @@ def _call_gemini(spec: ProviderSpec, system: str, user: str) -> CallResult:
     except (ValueError, IndexError, KeyError, AttributeError) as exc:
         raise ProviderError("invalid_response",
                             f"Provider returned an unexpected body shape ({type(exc).__name__}).")
+
+    _guard_truncation(spec, (cands[0] or {}).get("finishReason"), data.get("usageMetadata"))
 
     return CallResult(ok=True, text=text, latency_ms=latency, model=spec.model_id,
                       provider="gemini", usage=data.get("usageMetadata") or {})
@@ -297,7 +355,7 @@ def _call_ollama(spec: ProviderSpec, system: str, user: str) -> CallResult:
         payload["options"]["num_predict"] = spec.max_output_tokens
 
     t0 = time.perf_counter()
-    with httpx.Client(timeout=spec.timeout_s, follow_redirects=False) as client:
+    with _client_for(spec, base) as client:
         resp = client.post(f"{base}/api/chat", json=payload)
     latency = int((time.perf_counter() - t0) * 1000)
 
@@ -309,6 +367,8 @@ def _call_ollama(spec: ProviderSpec, system: str, user: str) -> CallResult:
     except (ValueError, AttributeError) as exc:
         raise ProviderError("invalid_response",
                             f"Provider returned an unexpected body shape ({type(exc).__name__}).")
+
+    _guard_truncation(spec, data.get("done_reason"), {"eval_count": data.get("eval_count")})
 
     return CallResult(ok=True, text=text, latency_ms=latency, model=spec.model_id,
                       provider="ollama", usage={"eval_count": data.get("eval_count")})
@@ -352,7 +412,7 @@ def complete(spec: ProviderSpec, system: str, user: str) -> CallResult:
                           error_message=_sanitize(exc.message),
                           provider=spec.provider_type, model=spec.model_id)
     except Exception as exc:  # noqa: BLE001
-        net = _net_error(exc)
+        net = _net_error(exc, spec)
         return CallResult(ok=False, error_category=net.category,
                           error_message=_sanitize(net.message),
                           provider=spec.provider_type, model=spec.model_id)
@@ -395,7 +455,7 @@ def list_models(spec: ProviderSpec) -> dict[str, Any]:
         base = resolve_base_url(spec)
         headers: dict[str, str] = {}
         if spec.provider_type == "ollama":
-            with httpx.Client(timeout=min(spec.timeout_s, 15)) as c:
+            with _client_for(spec, base, timeout=min(spec.timeout_s, 15)) as c:
                 r = c.get(f"{base}/api/tags")
             if r.status_code >= 400:
                 return {"ok": False, "models": [], "error": f"HTTP {r.status_code}"}
@@ -405,7 +465,7 @@ def list_models(spec: ProviderSpec) -> dict[str, Any]:
         if spec.provider_type == "gemini":
             if spec.api_key:
                 headers["x-goog-api-key"] = spec.api_key
-            with httpx.Client(timeout=min(spec.timeout_s, 15)) as c:
+            with _client_for(spec, base, timeout=min(spec.timeout_s, 15)) as c:
                 r = c.get(f"{base}/models", headers=headers)
             if r.status_code >= 400:
                 return {"ok": False, "models": [], "error": f"HTTP {r.status_code}"}
@@ -418,7 +478,7 @@ def list_models(spec: ProviderSpec) -> dict[str, Any]:
             headers["x-api-key"] = spec.api_key
             headers["anthropic-version"] = "2023-06-01"
             headers.pop("Authorization", None)
-        with httpx.Client(timeout=min(spec.timeout_s, 15)) as c:
+        with _client_for(spec, base, timeout=min(spec.timeout_s, 15)) as c:
             r = c.get(f"{base}/models", headers=headers)
         if r.status_code >= 400:
             return {"ok": False, "models": [], "error": f"HTTP {r.status_code}"}

@@ -1,13 +1,3 @@
-# ============================================================
-# SentinelGraph AI - development / test dependencies
-#
-# Install:  python -m pip install -r requirements.txt -r requirements-dev.txt
-# ============================================================
-
--r requirements.txt
-
-pytest==9.2.0
-pytest-asyncio==1.4.1
-iniconfig==2.3.1
-pluggy==1.7.0
-Pygments==2.21.0
+# Convenience shim: the canonical dev manifest lives in
+# backend/requirements-dev.txt.
+-r backend/requirements-dev.txt

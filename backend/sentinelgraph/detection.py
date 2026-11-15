@@ -476,6 +476,5 @@ def run_all(
 
 
 def rules_metadata() -> list[dict[str, Any]]:
-    from .db import get_conn, rows_to_dicts
-    cur = get_conn().execute("SELECT * FROM rules ORDER BY id")
-    return rows_to_dicts(cur.fetchall())
+    from .db import fetchall, rows_to_dicts
+    return rows_to_dicts(fetchall("SELECT * FROM rules ORDER BY id"))

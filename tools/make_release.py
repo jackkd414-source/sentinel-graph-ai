@@ -21,6 +21,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -369,6 +370,35 @@ def export_demo_dataset(out: Path, db_path: Path) -> int:
     return len(rows)
 
 
+def _reset_output_dir(out: Path) -> None:
+    """Clear the previous build, tolerating a transient Windows lock.
+
+    On Windows a just-written tree can still be held by an editor with one of its
+    files open, or by the antivirus scanner or the search indexer, and
+    ``shutil.rmtree`` then fails with WinError 32 even when the directory is
+    empty. Retrying clears the transient cases. If the lock outlives the retries
+    the cause is outside this script, so name it instead of dumping a traceback.
+    """
+    for attempt in range(5):
+        try:
+            shutil.rmtree(out)
+            break
+        except FileNotFoundError:
+            break
+        except PermissionError as exc:
+            if attempt == 4:
+                raise SystemExit(
+                    f"Cannot clear {out}: another process is holding it.\n"
+                    f"  {exc}\n"
+                    "Most often an editor has a file from that folder open, or the\n"
+                    "antivirus scanner is still reading the tree it just saw written.\n"
+                    "Close anything open inside it and run again, or point --out at a\n"
+                    "fresh directory."
+                ) from exc
+            time.sleep(0.5 * (attempt + 1))
+    out.mkdir(parents=True, exist_ok=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="release/sentinelgraph-ai")
@@ -376,9 +406,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     out = (ROOT / args.out).resolve()
 
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True, exist_ok=True)
+    _reset_output_dir(out)
 
     copied = build_tree(out)
     print(f"[1/7] copied {copied} files -> {out}")

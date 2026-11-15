@@ -200,6 +200,67 @@ def test_export_demo_dataset_writes_jsonl_and_readme(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# output directory reset
+# ---------------------------------------------------------------------------
+
+def test_reset_output_dir_clears_a_stale_tree(tmp_path):
+    out = tmp_path / "out"
+    (out / "stale").mkdir(parents=True)
+    (out / "stale" / "old.txt").write_text("old", encoding="utf-8")
+
+    mr._reset_output_dir(out)
+
+    assert out.is_dir()
+    assert list(out.iterdir()) == []
+
+
+def test_reset_output_dir_creates_a_missing_tree(tmp_path):
+    out = tmp_path / "not-yet"
+    mr._reset_output_dir(out)
+    assert out.is_dir()
+
+
+def test_reset_output_dir_retries_a_transient_lock(tmp_path, monkeypatch):
+    """A scanner holding the tree for a moment must not abort the build."""
+    out = tmp_path / "out"
+    out.mkdir()
+    real_rmtree = mr.shutil.rmtree
+    attempts = {"n": 0}
+
+    def flaky(path, *args, **kwargs):
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise PermissionError(32, "The process cannot access the file")
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(mr.shutil, "rmtree", flaky)
+    monkeypatch.setattr(mr.time, "sleep", lambda _seconds: None)
+
+    mr._reset_output_dir(out)
+
+    assert attempts["n"] == 3
+
+
+def test_reset_output_dir_explains_a_persistent_lock(tmp_path, monkeypatch):
+    """The real cause is outside the script, so say so instead of crashing."""
+    out = tmp_path / "out"
+    out.mkdir()
+
+    def always_locked(*_args, **_kwargs):
+        raise PermissionError(32, "The process cannot access the file")
+
+    monkeypatch.setattr(mr.shutil, "rmtree", always_locked)
+    monkeypatch.setattr(mr.time, "sleep", lambda _seconds: None)
+
+    with pytest.raises(SystemExit) as exc:
+        mr._reset_output_dir(out)
+
+    message = str(exc.value)
+    assert "another process is holding it" in message
+    assert "--out" in message
+
+
+# ---------------------------------------------------------------------------
 # archive verification
 # ---------------------------------------------------------------------------
 

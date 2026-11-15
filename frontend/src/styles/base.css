@@ -309,6 +309,15 @@ a:hover { text-decoration: underline; }
 .tw-sidebar-foot .mono { color: var(--tw-sidebar-muted); }
 .tw-sidebar-foot .tw-dot-ok { background: var(--tw-sidebar-accent); }
 
+/* --- language switch: lives in the sidebar, so it follows the dark rail -- */
+.tw-lang { display: inline-flex; align-self: flex-start; margin-top: 3px;
+  border: 1px solid var(--tw-sidebar-border); border-radius: 999px; overflow: hidden; }
+.tw-lang-btn { border: 0; background: transparent; cursor: pointer; padding: 3px 11px;
+  font: inherit; font-size: 10.5px; font-weight: 650; letter-spacing: .05em;
+  color: var(--tw-sidebar-muted); }
+.tw-lang-btn:hover { color: var(--tw-sidebar-accent); }
+.tw-lang-btn.on { background: var(--tw-sidebar-accent); color: #06231f; }
+
 /* --- topbar: search first, utility cluster right ------------------------- */
 .tw-topbar { height: 64px; gap: 18px; padding: 0 var(--tw-content-pad); }
 .tw-search-lg {

@@ -13,6 +13,8 @@ import { EvidenceRepository, DetectionRules } from "./pages/ArtifactsRules";
 import { ProvidersPage } from "./pages/ProvidersPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { TutorialPage } from "./pages/TutorialPage";
+import { LangSwitch } from "./i18n";
 import { clearToken, getToken, hasToken, setToken } from "./auth";
 import type { RouteKey } from "./routes";
 
@@ -22,7 +24,14 @@ const initials = (name?: string) =>
     .map((w) => w[0]!.toUpperCase()).join("") || "SG";
 
 export function App() {
-  const [route, setRoute] = useState<RouteKey>("dashboard");
+  const [route, setRouteState] = useState<RouteKey>(
+    () => (localStorage.getItem("sg.route") as RouteKey) || "dashboard",
+  );
+  /** Remembered so a language switch (which remounts the app) stays on the page. */
+  const setRoute = useCallback((r: RouteKey) => {
+    localStorage.setItem("sg.route", r);
+    setRouteState(r);
+  }, []);
   const [incidentId, setIncidentId] = useState<number | null>(null);
   const [eventsQuery, setEventsQuery] = useState("");
   const [graphFocusEvent, setGraphFocusEvent] = useState<number | null>(null);
@@ -116,6 +125,9 @@ export function App() {
       { key: "reports", label: "Reports", icon: Icons.reports({}) },
       { key: "settings", label: "Settings", icon: Icons.settings({}) },
     ] },
+    { label: "Learn", items: [
+      { key: "tutorial", label: "Tutorial", icon: Icons.info({}) },
+    ] },
   ];
 
   const sidebar = (
@@ -129,6 +141,7 @@ export function App() {
             <span className={`tw-dot ${health?.status === "ok" ? "tw-dot-ok" : "tw-dot-err"}`} />
             {health?.status === "ok" ? "System Healthy" : "Backend unreachable"}
           </span>
+          <LangSwitch />
           <span className="mono">v{health?.version || "—"}</span>
         </>
       }
@@ -202,6 +215,8 @@ export function App() {
         <div className="tw-content"><ProvidersPage /></div>
       ) : route === "reports" ? (
         <div className="tw-content"><ReportsPage onOpenIncident={openIncident} /></div>
+      ) : route === "tutorial" ? (
+        <div className="tw-content"><TutorialPage onNavigate={setRoute} /></div>
       ) : (
         <div className="tw-content"><SettingsPage /></div>
       )}

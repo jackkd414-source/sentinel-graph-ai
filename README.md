@@ -396,3 +396,14 @@ Batasan yang tersisa (jujur):
 6. **Ekspor STIX/TAXII** agar temuan bisa dibagikan ke platform lain.
 7. **Virtualisasi graph** (clustering dinamis) untuk >2000 node — cap + grouping saat ini
    menangani kepadatan, tetapi belum meng-cluster secara semantik.
+
+## Tutorial and language
+
+The sidebar has a **Tutorial** tab (group *Learn*) that walks through the whole
+workflow in nine steps, each linking to the screen it describes, so the app can
+be learned without opening this README.
+
+The sidebar footer has an **EN | ID** switch that translates the entire
+interface. The choice is remembered in `localStorage: sg.lang`. Machine-generated
+content stays in its original form, because that is data rather than interface:
+incident and alert titles, host names, hashes, relationship identifiers.

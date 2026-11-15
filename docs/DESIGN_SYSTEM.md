@@ -116,3 +116,21 @@ to open the docs or the source:
   hypotheses are always shown apart.
 - Dismissible, and restorable via the *How this works* button in the page header
   (state in `localStorage: sg.guide.hidden`).
+
+## Tutorial tab + bilingual UI (EN / ID)
+
+- **Tutorial** (`pages/TutorialPage.tsx`, sidebar group *Learn*): a nine-step
+  guided tour of the workflow. Every step links straight to the screen it
+  describes, so the product can be learned without any external document.
+- **Language switch** (`src/i18n.tsx`, sidebar footer): EN | ID for the whole
+  application, persisted in `localStorage: sg.lang`.
+  - English stays the single source of truth in the components. The rendered
+    tree is translated through a MutationObserver, so no component needs a
+    `t()` call and a missing entry degrades to English, never to a blank or a
+    raw key.
+  - Unknown strings are treated as data and left alone: incident and alert
+    titles, host names, hashes, relation identifiers (active_on, ran, ...).
+  - Switching language remounts the app, which restores the English source for
+    free; the current screen survives via `localStorage: sg.route`.
+  - MutationObserver callbacks are microtasks, so they run before paint: a
+    React re-render never flashes English before the Indonesian text lands.

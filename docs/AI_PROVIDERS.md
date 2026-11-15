@@ -56,6 +56,14 @@ yang tidak ada di DB ditandai `unsupported` dan tidak masuk laporan sebagai fakt
 Test memakai provider mock (`backend/tests/test_ai.py`, fixture `fake_provider`) -
 tidak memerlukan kredensial dan tidak mengirim request keluar.
 
+Untuk demo manual Evidence Guard tanpa kredensial, jalankan
+`tools/adversarial_provider.py`. Endpoint lokal itu menjawab lewat protokol Ollama
+dan sengaja mengarang enam referensi event. Daftarkan provider tipe `ollama` ke
+`http://127.0.0.1:11434`, lalu jalankan analisis: hipotesis yang bersitasi palsu
+ditandai `unsupported`, jumlah referensi yang dibuang muncul di laporan.
+Ollama satu-satunya tipe provider yang boleh memakai alamat loopback, karena itu
+tool ini berbicara protokol Ollama, bukan OpenAI.
+
 ## Batas token (max_tokens), penyebab umum "AI analysis gagal"
 
 Model reasoning (mis. keluarga deepseek/`-flash`) memakai sebagian budget token untuk

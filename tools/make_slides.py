@@ -214,6 +214,31 @@ def shots(slide, names, captions, y, *, gap=Inches(0.22)):
     return Emu(int(sh))
 
 
+def shot_stack(slide, items, x, y, width, *, gap=Inches(0.36)):
+    """Screenshots stacked vertically, each scaled to `width`, with a caption.
+
+    Unlike shots() this reads each image's real aspect ratio, so crops of
+    different shapes keep their proportions.
+    """
+    from PIL import Image
+
+    cur = y
+    for name, caption in items:
+        path = os.path.join(SHOTS, name)
+        if not os.path.exists(path):
+            continue
+        with Image.open(path) as im:
+            sh = Emu(int(width * im.height / im.width))
+        rect(slide, x - Inches(0.045), cur - Inches(0.045),
+             Emu(int(width) + int(Inches(0.09))), Emu(int(sh) + int(Inches(0.09))),
+             fill=SURFACE, line=BORDER, radius=0.06)
+        slide.shapes.add_picture(path, x, cur, width=Emu(int(width)))
+        tf = textbox(slide, x, Emu(int(cur + sh)) + Inches(0.08), width, Inches(0.24))
+        para(tf, caption, size=10, color=MUTED, first=True)
+        cur = Emu(int(cur + sh)) + gap
+    return cur
+
+
 # --- slides -----------------------------------------------------------------
 def slide_title(prs, n=1):
     s = blank(prs)
@@ -416,24 +441,36 @@ def slide_adversarial(prs, n):
     header(s, "Kami menguji respons yang berisi referensi palsu.",
            "Adversarial Validation")
 
+    # Two columns: the summary on the left, the real product output on the right.
+    LW = Inches(6.0)
+    RX = M + LW + Inches(0.29)
+    RW = CW - LW - Inches(0.29)
+
     table(s, [
         ["Input dari model uji", "Perilaku sistem yang tercatat"],
         ["6 ID karangan + 1 ID asli", "6 ditolak dan dilaporkan; referensi valid dipertahankan"],
         ["3 ID palsu seluruhnya", "Semua ditolak; hipotesis ditandai unsupported"],
         ["JSON tidak valid", "validation_failed; konten AI tidak dimasukkan ke laporan"],
-    ], M, Inches(2.3), CW, [Inches(3.6), CW - Inches(3.6)], size=13, row_h=Inches(0.6))
+    ], M, Inches(2.12), LW, [Inches(2.3), LW - Inches(2.3)], size=11.5, row_h=Inches(0.46))
 
-    y = Inches(4.82)
+    y = Inches(4.45)
     for i, (big, cap) in enumerate([("6", "referensi palsu ditolak"),
                                     ("0", "referensi palsu lolos")]):
-        x = M + i * Inches(3.6)
-        rect(s, x, y, Inches(3.3), Inches(0.92), fill=SURFACE, line=BORDER, radius=0.14)
-        tf = textbox(s, x + Inches(0.22), y + Inches(0.1), Inches(2.9), Inches(0.74))
-        para(tf, big, size=26, bold=True, color=CRITICAL, line=1.0, first=True)
-        para(tf, cap, size=12.5, color=INK2, before=1)
+        x = M + i * Inches(3.1)
+        rect(s, x, y, Inches(2.85), Inches(0.9), fill=SURFACE, line=BORDER, radius=0.14)
+        tf = textbox(s, x + Inches(0.2), y + Inches(0.09), Inches(2.5), Inches(0.72))
+        para(tf, big, size=25, bold=True, color=CRITICAL, line=1.0, first=True)
+        para(tf, cap, size=12, color=INK2, before=1)
+
+    shot_stack(s, [
+        ("19_evidence_guard_hypotheses.png",
+         "Panel hipotesis: satu evidence-linked, satu tanpa bukti"),
+        ("20_evidence_guard_report.png",
+         "Laporan seksi 6: enam sitasi dibuang dan dilaporkan"),
+    ], RX, Inches(2.12), RW)
 
     keyline(s, "Kami menguji bukan hanya jawaban yang baik, tetapi juga respons yang "
-               "sengaja memberikan referensi tidak valid.", y=Inches(5.94))
+               "sengaja memberikan referensi tidak valid.", y=Inches(6.06))
     footer(s, n)
     notes(s,
           "NASKAH PEMBICARA (sekitar 65 detik)",
@@ -444,6 +481,12 @@ def slide_adversarial(prs, n):
           "sehingga konten AI tidak masuk ke laporan. Ini menguji integritas referensi "
           "dan penanganan format, bukan membuktikan akurasi deteksi terhadap seluruh "
           "ancaman.",
+          "TANGKAPAN LAYAR DI SLIDE INI ADALAH KELUARAN ASLI, bukan mockup. Diambil dari "
+          "satu kali analisis pada INC-0001 dengan provider lokal yang sengaja "
+          "mengembalikan enam ID karangan. Kiri: panel hipotesis, satu bertanda "
+          "evidence-linked dengan sitasi nyata (#903, #909, #910, #913), satu bertanda "
+          "no surviving evidence dengan sitasi kosong. Kanan: laporan seksi 6, dengan "
+          "baris Evidence guard yang menyatakan enam sitasi dibuang.",
           "ANTISIPASI PERTANYAAN JURI",
           "Apakah sudah mendeteksi zero-day? Kami tidak mengklaim kemampuan zero-day "
           "detection. Prototype ini menggunakan detection rules dan korelasi terhadap "
@@ -691,11 +734,12 @@ def main():
     for i, build in enumerate(builders, start=1):
         build(prs, i)
 
-    os.makedirs(OUT_DIR, exist_ok=True)
-    prs.save(OUT)
-    make_reproducible(OUT)
-    print(f"OK  {OUT}")
-    print(f"    {len(prs.slides)} slides, {os.path.getsize(OUT) / 1024:.0f} KB")
+    out = sys.argv[1] if len(sys.argv) > 1 else OUT
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    prs.save(out)
+    make_reproducible(out)
+    print(f"OK  {out}")
+    print(f"    {len(prs.slides)} slides, {os.path.getsize(out) / 1024:.0f} KB")
 
 
 if __name__ == "__main__":

@@ -24,17 +24,33 @@ from .timeutil import now_iso
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
+    from . import auth
     from .config import enforce_secure_binding, is_loopback_host
 
     s = get_settings()
     host = args.host or s.host
+    # Create the analyst account before the bind decision. An account is a valid
+    # authentication path, so the guard has to see whether one exists, and the
+    # operator should learn about the default password before the port opens
+    # rather than after.
+    init_db()
+    account = auth.ensure_default_user()
     # Fail before uvicorn binds: never expose an unauthenticated API off-host.
-    enforce_secure_binding(host, s.auth_token)
+    enforce_secure_binding(
+        host, s.auth_token,
+        user_auth_available=bool(account),
+        default_password_in_use=auth.uses_default_password(),
+        allow_default_password=s.allow_default_password,
+    )
+    # The weak-exposure warning is emitted by the app's own startup hook, which
+    # runs on both this path and a direct `uvicorn sentinelgraph.api:app`, so it
+    # is deliberately not repeated here.
     if not is_loopback_host(host):
         os.environ["SG_HOST"] = host  # let the app's own startup guard agree
     print(f"SentinelGraph AI  ->  http://{host}:{args.port or s.port}")
     if not is_loopback_host(host):
-        print("  auth    : SG_AUTH_TOKEN required on every /api request")
+        print("  auth    : login required on every /api request"
+              + (", or the shared SG_AUTH_TOKEN" if s.auth_token else ""))
     print(f"  database : {s.db_path}")
     print("  AI mode  : " + ("provider configured" if s.master_key else
                               "core-only until a provider is configured"))

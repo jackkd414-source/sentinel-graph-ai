@@ -47,9 +47,23 @@ class Settings:
         self.port: int = int(os.environ.get("SG_PORT", "8088"))
         self.debug: bool = os.environ.get("SG_DEBUG", "false").lower() == "true"
 
-        # Shared-secret bearer token. Empty => no authentication, which is only
-        # ever acceptable while bound to loopback (see enforce_secure_binding).
+        # Shared-secret bearer token. Empty => the bearer path is off, and the
+        # login gate is the only thing standing between a caller and the data.
         self.auth_token: str = os.environ.get("SG_AUTH_TOKEN", "").strip()
+
+        # How long a login session stays valid. Short enough that a forgotten
+        # browser tab does not stay authenticated for a week.
+        self.session_ttl_hours: int = int(
+            os.environ.get("SG_SESSION_TTL_HOURS", "12")
+        )
+
+        # Explicit opt-in for exposing the API off-host while the account still
+        # carries the password printed in the README. Off by default: a demo can
+        # set it, a real deployment should change the password instead.
+        self.allow_default_password: bool = (
+            os.environ.get("SG_ALLOW_DEFAULT_PASSWORD", "false").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
 
         origins = os.environ.get(
             "SG_CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
@@ -139,25 +153,76 @@ def is_loopback_host(host: str | None) -> bool:
         return False
 
 
-def enforce_secure_binding(host: str | None, auth_token: str | None) -> None:
-    """Refuse to expose the API on a non-loopback interface without auth.
+def enforce_secure_binding(
+    host: str | None,
+    auth_token: str | None,
+    *,
+    user_auth_available: bool = False,
+    default_password_in_use: bool = False,
+    allow_default_password: bool = False,
+) -> None:
+    """Refuse to expose the API on a non-loopback interface without real auth.
 
     SentinelGraph has no multi-user auth model: it is a single-analyst tool.
     Binding it to a routable interface with no authentication would publish the
     analyst's full investigation database to the network. CORS is not
     authentication and is deliberately not accepted as a substitute.
+
+    Two things count as authentication: the shared bearer token, and the single
+    analyst account. But an account still using the password printed in the
+    README is not a credential anyone has to guess, so exposing that off-host is
+    refused too, unless the operator says so explicitly with
+    ``SG_ALLOW_DEFAULT_PASSWORD``. That keeps the default safe while leaving the
+    deliberate demo deployment one documented flag away.
     """
     if is_loopback_host(host):
         return
     if (auth_token or "").strip():
         return
-    raise RuntimeError(
-        f"Refusing to bind SentinelGraph to non-loopback host '{host}' without "
-        "authentication.\n"
-        "The API defaults to localhost-only. To expose it on the network you must "
-        "set SG_AUTH_TOKEN; every /api request will then require "
-        "'Authorization: Bearer <token>'. CORS is NOT authentication.\n"
-        "  Windows : set SG_AUTH_TOKEN=<long-random-value>\n"
-        "  Linux   : export SG_AUTH_TOKEN=<long-random-value>\n"
-        f"Then: python -m sentinelgraph serve --host {host}"
+    if not user_auth_available:
+        raise RuntimeError(
+            f"Refusing to bind SentinelGraph to non-loopback host '{host}' without "
+            "authentication.\n"
+            "The API defaults to localhost-only. To expose it on the network you must "
+            "set SG_AUTH_TOKEN; every /api request will then require "
+            "'Authorization: Bearer ***'. CORS is NOT authentication.\n"
+            "  Windows : set SG_AUTH_TOKEN=<long-random-value>\n"
+            "  Linux   : export SG_AUTH_TOKEN=<long-random-value>\n"
+            f"Then: python -m sentinelgraph serve --host {host}"
+        )
+    if default_password_in_use and not allow_default_password:
+        raise RuntimeError(
+            f"Refusing to bind SentinelGraph to non-loopback host '{host}' while the "
+            "account still uses the shipped default password.\n"
+            "'admin' / 'admin123' is published in the README, so it is not a secret and\n"
+            "anyone who can reach this port could read the investigation database.\n"
+            "Pick one:\n"
+            "  1. change the password in the app (Account menu), then restart; or\n"
+            "  2. set SG_AUTH_TOKEN=<long-random-value> and use the shared bearer token; or\n"
+            "  3. set SG_ALLOW_DEFAULT_PASSWORD=1 to expose it anyway (deliberate demos).\n"
+            f"Then: python -m sentinelgraph serve --host {host}"
+        )
+
+
+def warn_on_weak_exposure(
+    host: str | None,
+    auth_token: str | None,
+    default_password_in_use: bool,
+) -> str | None:
+    """Return a warning when the API is exposed behind the shipped password.
+
+    Not a refusal: the operator may have opted in with SG_ALLOW_DEFAULT_PASSWORD.
+    But anyone on that network can log in with a credential printed in the
+    README, so it must not happen quietly.
+    """
+    if is_loopback_host(host):
+        return None
+    if (auth_token or "").strip():
+        return None
+    if not default_password_in_use:
+        return None
+    return (
+        f"WARNING: binding to '{host}' with the default password still active.\n"
+        "  Anyone who can reach this port can log in as admin / admin123.\n"
+        "  Change it in the app (Account menu) or set SG_AUTH_TOKEN.\n"
     )

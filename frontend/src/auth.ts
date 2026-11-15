@@ -1,12 +1,17 @@
 /**
- * Session-scoped bearer-token store for SG_AUTH_TOKEN deployments.
+ * Session-scoped credential store.
+ *
+ * Holds one of two things, and the API cannot tell them apart because both
+ * travel in the same Authorization header:
+ *   - a login session token from POST /api/auth/login (the normal case), or
+ *   - the shared SG_AUTH_TOKEN, for headless or scripted use.
  *
  * localStorage is deliberately NOT used: it is disk-backed and survives the
- * session, so a shared machine would keep the analyst's token indefinitely.
+ * session, so a shared machine would keep the analyst's credential indefinitely.
  * sessionStorage is cleared when the tab closes and is the weakest storage that
  * still survives in-app navigation.
  *
- * The token is never rendered, logged, or interpolated into error text. Only the
+ * The value is never rendered, logged, or interpolated into error text. Only the
  * Authorization header carries it.
  */
 const KEY = "sg_auth_token";

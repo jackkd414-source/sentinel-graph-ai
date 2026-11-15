@@ -90,13 +90,31 @@ keamanan yang diterima secara sadar:
 - **Default localhost-only.** `serve` hanya bind ke `127.0.0.1`. Ini batas keamanan
   utama: tidak ada permukaan jaringan yang terekspos secara default.
 - **Binding non-loopback butuh autentikasi.** Menjalankan `--host` non-loopback
-  (mis. `0.0.0.0`) **gagal saat startup** kecuali `SG_AUTH_TOKEN` diset. Setelah diset,
-  setiap `/api/*` (kecuali `/api/health`) wajib `Authorization: Bearer <token>`;
-  perbandingan memakai `hmac.compare_digest` (constant-time).
+  (mis. `0.0.0.0`) **gagal saat startup** kecuali ada autentikasi: `SG_AUTH_TOKEN`
+  atau akun analis. Begitu API bisa dijangkau jaringan, setiap `/api/*` wajib
+  kredensial, kecuali `/api/health`, `/api/auth/login`, `/api/auth/me`, dan
+  `/api/auth/logout`.
+- **Satu akun, bukan multi-user.** Akun dibuat otomatis saat pertama jalan dengan
+  kredensial bawaan `admin` / `admin123`. Password disimpan sebagai `scrypt`
+  (n=2^14, r=8, p=1) dengan salt 16 byte per akun. Tidak ada kolom plaintext, dan
+  tidak ada peran atau pemisahan hak per pengguna.
+- **Sesi disimpan sebagai hash.** Token sesi 32 byte acak; yang masuk database hanya
+  SHA-256-nya, jadi bocornya berkas database tidak menyerahkan sesi yang masih hidup.
+  Umur sesi diatur `SG_SESSION_TTL_HOURS` (bawaan 12 jam). Mengganti password
+  mengakhiri semua sesi.
+- **Password bawaan diblokir untuk bind terbuka.** Password bawaan adalah risiko
+  nyata: `admin123` tertulis di README, jadi selama belum diganti, siapa pun yang
+  bisa menjangkau port itu dapat masuk. Karena itu `serve --host` non-loopback
+  **ditolak** selama password bawaan masih dipakai, kecuali operator membuka
+  sengaja dengan `SG_ALLOW_DEFAULT_PASSWORD=1`. Server tetap mencetak peringatan
+  saat itu terjadi, dan UI menampilkan banner. Ganti lewat menu akun di kanan atas.
+- **Belum ada pembatasan laju login.** `/api/auth/login` belum punya throttle atau
+  lockout; percobaan gagal hanya tercatat di `audit_log`.
 - **CORS bukan autentikasi.** `SG_CORS_ORIGINS` hanya mengatur header browser; ia tidak
   memberi perlindungan apa pun terhadap klien non-browser. Jangan mengandalkannya.
-- **Satu token bersama.** Belum ada RBAC, sesi, atau pemisahan hak per pengguna. Token
-  bocor = akses penuh ke database investigasi. Rotasi dengan mengganti `SG_AUTH_TOKEN`.
+- **Bearer bersama masih berlaku.** `SG_AUTH_TOKEN`, bila diset, diterima di jalur
+  yang sama dengan token sesi. Token bocor = akses penuh ke database investigasi.
+  Rotasi dengan mengganti nilainya.
 - **Data tetap teks-jelas di SQLite lokal** kecuali kunci provider (dienkripsi dengan
   kunci utama: `SG_MASTER_KEY` atau `<data dir>/master.key`). Lindungi berkas `data/`
   dan berkas kunci itu dengan izin filesystem.
@@ -109,6 +127,11 @@ keamanan yang diterima secara sadar:
 | SSRF: pinned address (anti DNS-rebinding) | `security.PinnedHTTPTransport` | `test_ssrf_dns_rebinding_pins_the_verified_address`, `test_ssrf_transport_refuses_host_change` |
 | Upload memory exhaustion | `api._read_upload_bounded` | `test_upload_limits.py` |
 | Binding guard + Bearer auth | `config.enforce_secure_binding`, `api._require_auth` | `test_deployment.py` |
+| Login analis + sesi (scrypt, TTL, revokasi) | `auth.py`, `api.auth_login` | `test_auth.py` |
+| Password tidak pernah tersimpan plaintext | `auth.hash_password` (scrypt + salt per akun) | `test_auth.py::test_password_is_not_stored_in_readable_form` |
+| Token sesi hanya sebagai SHA-256 di DB | `auth._hash_token` | `test_auth.py::test_only_the_token_hash_reaches_the_database` |
+| Ganti password mengakhiri semua sesi | `auth.change_password` | `test_auth.py::test_password_change_ends_sessions_and_clears_the_default_flag` |
+| `/api/auth/me` tidak membocorkan status password bawaan | `api.auth_me` (hanya untuk pemanggil terautentikasi) | `test_auth.py::test_me_hides_the_default_password_state_from_a_stranger` |
 | Attack graph fit-to-view | `AttackGraph.fitView` (+ zoom-to-fit) | diverifikasi di browser (outOfView=0) |
 | CORS mengizinkan `Authorization` | `CORSMiddleware(allow_headers=[..., "Authorization"])` | `test_auth.py::test_preflight_advertises_authorization_header` |
 | OPTIONS preflight tidak diblokir auth | `api._require_auth` melewati `OPTIONS` sebelum cek token | `test_auth.py::test_preflight_is_not_blocked_by_auth` |

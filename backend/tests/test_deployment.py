@@ -49,18 +49,70 @@ def test_binding_allows_routable_host_with_auth():
     enforce_secure_binding("0.0.0.0", "a-long-shared-secret")
 
 
-def test_cli_serve_refuses_external_bind_without_token():
+def test_binding_refuses_the_default_password_off_host():
+    """A password printed in the README is not a credential."""
+    with pytest.raises(RuntimeError) as exc:
+        enforce_secure_binding(
+            "0.0.0.0", "", user_auth_available=True, default_password_in_use=True,
+        )
+    msg = str(exc.value)
+    assert "default password" in msg
+    assert "SG_ALLOW_DEFAULT_PASSWORD" in msg
+    assert "SG_AUTH_TOKEN" in msg
+
+
+def test_binding_allows_the_default_password_when_explicitly_opted_in():
+    """A deliberate demo must still be possible, but only on purpose."""
+    enforce_secure_binding(
+        "0.0.0.0", "", user_auth_available=True,
+        default_password_in_use=True, allow_default_password=True,
+    )
+
+
+def test_binding_allows_a_changed_password_off_host():
+    enforce_secure_binding(
+        "0.0.0.0", "", user_auth_available=True, default_password_in_use=False,
+    )
+
+
+def test_shared_token_outranks_the_default_password():
+    enforce_secure_binding(
+        "0.0.0.0", "a-long-shared-secret",
+        user_auth_available=True, default_password_in_use=True,
+    )
+
+
+def test_weak_exposure_warning_only_fires_for_a_real_risk():
+    from sentinelgraph.config import warn_on_weak_exposure
+
+    assert warn_on_weak_exposure("127.0.0.1", "", True) is None
+    assert warn_on_weak_exposure("0.0.0.0", "a-token", True) is None
+    assert warn_on_weak_exposure("0.0.0.0", "", False) is None
+    warning = warn_on_weak_exposure("0.0.0.0", "", True) or ""
+    assert "admin123" in warning and "WARNING" in warning
+
+
+def test_cli_serve_refuses_external_bind_without_token(tmp_path):
     """End-to-end: `python -m sentinelgraph serve --host 0.0.0.0` must abort."""
     env = dict(os.environ)
     env["PYTHONPATH"] = str(REPO_ROOT / "backend")
     env.pop("SG_AUTH_TOKEN", None)
+    env.pop("SG_ALLOW_DEFAULT_PASSWORD", None)
+    # Point at a fresh database. The guard now reasons about whether the account
+    # still carries its default password, so leaving this unset would make the
+    # test read whatever password the developer's own data/ directory holds.
+    env["SG_DB_PATH"] = str(tmp_path / "cli.db")
+    env["SG_ARTIFACT_DIR"] = str(tmp_path / "artifacts")
+    env["SG_MASTER_KEY_FILE"] = str(tmp_path / "master.key")
     env["SG_HOST"] = "0.0.0.0"
     proc = subprocess.run(
         [sys.executable, "-m", "sentinelgraph", "serve", "--host", "0.0.0.0"],
         cwd=str(REPO_ROOT), env=env, capture_output=True, text=True, timeout=60,
     )
     assert proc.returncode != 0
-    assert "SG_AUTH_TOKEN" in (proc.stderr + proc.stdout)
+    out = proc.stderr + proc.stdout
+    assert "SG_AUTH_TOKEN" in out
+    assert "default password" in out
 
 
 # --------------------------------------------------------------------------

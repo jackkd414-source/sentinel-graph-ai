@@ -324,6 +324,35 @@ CREATE TABLE IF NOT EXISTS provider_configs (
 );
 
 -- ============================================================
+-- Analyst account and login sessions
+-- ============================================================
+-- Single-analyst product: exactly one account is supported. The row is created
+-- on first start with the shipped default credential, and the password is
+-- stored as a scrypt hash with a per-account salt. There is no plaintext
+-- column and no multi-user concept by design.
+CREATE TABLE IF NOT EXISTS app_users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,      -- scrypt(password, salt) as hex
+    salt          TEXT NOT NULL,      -- per-account random salt, hex
+    params        TEXT NOT NULL,      -- e.g. scrypt$n=16384,r=8,p=1
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
+-- Only the SHA-256 of a session token is stored, so a database leak does not
+-- hand over live sessions. Rows are deleted on logout, on password change and
+-- when they expire.
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    token_hash   TEXT PRIMARY KEY,    -- sha256(session token), hex
+    username     TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    expires_at   TEXT NOT NULL,
+    last_seen_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry ON auth_sessions(expires_at);
+
+-- ============================================================
 -- Audit log
 -- ============================================================
 CREATE TABLE IF NOT EXISTS audit_log (

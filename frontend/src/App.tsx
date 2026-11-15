@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, type Health, type Project } from "./api";
+import { api, type AuthMe, type Health, type Project } from "./api";
 import { AppShell, GlobalSearch, Sidebar, Topbar, type NavGroup } from "./components/layout";
 import { Icons } from "./components/icons";
 import { ErrorState, Notification } from "./components/ui";
@@ -15,7 +15,7 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TutorialPage } from "./pages/TutorialPage";
 import { LangSwitch } from "./i18n";
-import { clearToken, getToken, hasToken, setToken } from "./auth";
+import { clearToken, setToken } from "./auth";
 import type { RouteKey } from "./routes";
 
 const initials = (name?: string) =>
@@ -43,11 +43,21 @@ export function App() {
   const [reloadKey, setReloadKey] = useState(0);
   const [demoBusy, setDemoBusy] = useState(false);
   const [toast, setToast] = useState<{ kind: "ok" | "err" | "info"; message: string } | null>(null);
-  const [tokenOpen, setTokenOpen] = useState(false);
+  const [authMe, setAuthMe] = useState<AuthMe | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
 
   const loadShell = useCallback(async () => {
+    // Ask about auth first: when the server demands a credential, probing the
+    // rest of the API would only produce a 401 and a spurious error state.
+    let me: AuthMe | null = null;
+    try {
+      me = await api.authMe();
+      setAuthMe(me);
+    } catch {
+      setAuthMe(null);
+    }
     try {
       const h = await api.health();
       setHealth(h);
@@ -55,6 +65,7 @@ export function App() {
     } catch (e) {
       setBootError(e instanceof Error ? e.message : "Cannot reach the backend");
     }
+    if (me?.auth_required && !me.authenticated) return;
     try {
       const p = await api.projects();
       setProject(p.projects[0] ?? null);
@@ -64,7 +75,9 @@ export function App() {
   useEffect(() => { void loadShell(); }, [loadShell, reloadKey]);
 
   useEffect(() => {
-    const onUnauth = () => setTokenOpen(true);
+    // A 401 means the session died or never existed. Re-asking /api/auth/me
+    // decides which, and drops the shell back to the login screen if needed.
+    const onUnauth = () => void loadShell();
     const onAuth = () => void loadShell();
     window.addEventListener("sg:unauthorized", onUnauth);
     window.addEventListener("sg:auth-change", onAuth);
@@ -165,20 +178,35 @@ export function App() {
           <button className="tw-icon-btn" title="Alerts" aria-label="Alerts" onClick={() => setRoute("events")}>
             {Icons.bell({ style: { width: 17, height: 17 } })}
           </button>
-          <button className="tw-avatar" title={hasToken() ? "Session token set" : "Sign in"}
-                  aria-label="Session" onClick={() => setTokenOpen(true)}>
-            {initials(project?.name)}
+          <button className="tw-avatar"
+                  title={authMe?.username ? `Signed in as ${authMe.username}` : "Account"}
+                  aria-label="Account" onClick={() => setAccountOpen(true)}>
+            {initials(authMe?.username || project?.name)}
           </button>
         </>
       }
     />
   );
 
+  // A server that demands a credential gets nothing but the login screen. No
+  // shell, no navigation, no data: there is nothing to show until it answers.
+  if (authMe?.auth_required && !authMe.authenticated) {
+    return <LoginScreen onSignedIn={() => { void loadShell(); refresh(); }} />;
+  }
+
   return (
     <AppShell sidebar={sidebar} topbar={topbar}>
       {toast ? (
         <div className="tw-toast-wrap">
           <Notification kind={toast.kind} message={toast.message} onClose={() => setToast(null)} />
+        </div>
+      ) : null}
+
+      {authMe?.must_change_password ? (
+        <div className="tw-banner tw-banner-warn">
+          Password bawaan masih dipakai. Siapa pun yang bisa membuka alamat ini dapat
+          masuk sebagai <span className="mono">admin</span>. Ganti lewat menu akun di
+          kanan atas.
         </div>
       ) : null}
 
@@ -221,43 +249,184 @@ export function App() {
         <div className="tw-content"><SettingsPage /></div>
       )}
 
-      {tokenOpen ? (
-        <TokenDialog onClose={() => { setTokenOpen(false); void loadShell(); }} />
+      {accountOpen ? (
+        <AccountDialog
+          me={authMe}
+          onClose={() => setAccountOpen(false)}
+          onSignOut={() => { setAccountOpen(false); clearToken(); void loadShell(); }}
+          onPasswordChanged={() => { setAccountOpen(false); clearToken(); void loadShell(); }}
+        />
       ) : null}
     </AppShell>
   );
 }
 
-function TokenDialog({ onClose }: { onClose: () => void }) {
-  const [value, setValue] = useState("");
+/** Blocking login screen, shown whenever the server demands a credential. */
+function LoginScreen({ onSignedIn }: { onSignedIn: () => void }) {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("");
+  const [useToken, setUseToken] = useState(false);
+  const [tokenValue, setTokenValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const canSubmit = useToken ? tokenValue.trim().length > 0
+    : username.trim().length > 0 && password.length > 0;
+
+  const submit = async () => {
+    if (busy || !canSubmit) return;
+    setError(null);
+    if (useToken) {
+      setToken(tokenValue.trim());
+      onSignedIn();
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await api.login(username.trim(), password);
+      setToken(r.token);
+      onSignedIn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Login gagal.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onKey = (e: React.KeyboardEvent) => { if (e.key === "Enter") void submit(); };
+
   return (
-    <div className="tw-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="tw-dialog" role="dialog" aria-modal="true" aria-label="Session token">
-        <div className="tw-dialog-head">Session token</div>
+    <div className="tw-backdrop">
+      <div className="tw-dialog" role="dialog" aria-modal="true" aria-label="Masuk">
+        <div className="tw-dialog-head">SentinelGraph AI</div>
         <div className="tw-dialog-body">
           <p className="faint" style={{ fontSize: "var(--tw-fs-secondary)", lineHeight: 1.6, marginBottom: 12 }}>
-            Required only when the server runs with <span className="mono">SG_AUTH_TOKEN</span>. It is kept in
-            session storage for this tab and never rendered back.
+            Masuk untuk melanjutkan. Sesi disimpan di tab ini saja dan berakhir saat tab ditutup.
           </p>
-          <input className="tw-input" type="password" placeholder="Bearer token" autoFocus
-                 value={value} onChange={(e) => setValue(e.target.value)}
-                 onKeyDown={(e) => { if (e.key === "Enter" && value.trim()) { setToken(value); onClose(); } }} />
-          {getToken() ? (
-            <div className="row" style={{ marginTop: 10, gap: 8 }}>
-              <span className="tw-dot tw-dot-ok" />
-              <span className="faint" style={{ fontSize: "var(--tw-fs-meta)" }}>
-                A token is currently set ({getToken().length} chars, masked).
-              </span>
-            </div>
+          {useToken ? (
+            <input className="tw-input" type="password" placeholder="Bearer token" autoFocus
+                   value={tokenValue} onChange={(e) => setTokenValue(e.target.value)} onKeyDown={onKey} />
+          ) : (
+            <>
+              <input className="tw-input" placeholder="Username" autoFocus value={username}
+                     onChange={(e) => setUsername(e.target.value)} onKeyDown={onKey} />
+              <input className="tw-input" type="password" placeholder="Password"
+                     style={{ marginTop: 8 }} value={password}
+                     onChange={(e) => setPassword(e.target.value)} onKeyDown={onKey} />
+            </>
+          )}
+          {error ? (
+            <div className="tw-banner tw-banner-err" style={{ marginTop: 10 }}>{error}</div>
           ) : null}
+          <button className="tw-btn tw-btn-ghost" style={{ marginTop: 12 }}
+                  onClick={() => { setUseToken(!useToken); setError(null); }}>
+            {useToken ? "Pakai username dan password" : "Pakai bearer token"}
+          </button>
         </div>
         <div className="tw-dialog-foot">
-          {getToken() ? (
-            <button className="tw-btn" onClick={() => { clearToken(); onClose(); }}>Clear token</button>
+          <button className="tw-btn tw-btn-primary" disabled={busy || !canSubmit}
+                  onClick={() => void submit()}>
+            {busy ? "Memeriksa..." : "Masuk"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The single account: sign out, and change the password. */
+function AccountDialog({ me, onClose, onSignOut, onPasswordChanged }: {
+  me: AuthMe | null;
+  onClose: () => void;
+  onSignOut: () => void;
+  onPasswordChanged: () => void;
+}) {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const submit = async () => {
+    if (busy || !current || next.length < 8) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.changePassword(current, next);
+      // The server ends every session on a password change, including this one,
+      // so the stored credential is now dead. Show the confirmation briefly,
+      // then drop to the login screen rather than leaving a broken session.
+      setDone(true);
+      clearToken();
+      window.setTimeout(onPasswordChanged, 1200);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Gagal mengganti password.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await api.logout();
+    } catch { /* the session may already be gone; clearing locally is enough */ }
+    onSignOut();
+  };
+
+  return (
+    <div className="tw-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="tw-dialog" role="dialog" aria-modal="true" aria-label="Akun">
+        <div className="tw-dialog-head">Akun</div>
+        <div className="tw-dialog-body">
+          <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+            <span className={`tw-dot ${me?.authenticated ? "tw-dot-ok" : "tw-dot-warn"}`} />
+            <span>
+              {me?.authenticated
+                ? <>Masuk sebagai <b>{me.username || "admin"}</b></>
+                : "Belum login"}
+            </span>
+          </div>
+
+          {me?.via === "shared_token" ? (
+            <p className="faint" style={{ fontSize: "var(--tw-fs-meta)", marginBottom: 12 }}>
+              Sesi ini memakai bearer token bersama, bukan login.
+            </p>
           ) : null}
-          <button className="tw-btn" onClick={onClose}>Cancel</button>
-          <button className="tw-btn tw-btn-primary" disabled={!value.trim()}
-                  onClick={() => { setToken(value); onClose(); }}>Save</button>
+
+          {done ? (
+            <div className="tw-banner tw-banner-ok">
+              Password diganti. Semua sesi diakhiri, silakan login lagi.
+            </div>
+          ) : (
+            <>
+              {me?.must_change_password ? (
+                <div className="tw-banner tw-banner-warn" style={{ marginBottom: 12 }}>
+                  Password bawaan masih dipakai. Siapa pun yang bisa membuka alamat ini
+                  dapat masuk sebagai <span className="mono">admin</span>.
+                </div>
+              ) : null}
+              <input className="tw-input" type="password" placeholder="Password sekarang"
+                     value={current} onChange={(e) => setCurrent(e.target.value)} />
+              <input className="tw-input" type="password" placeholder="Password baru (minimal 8 karakter)"
+                     style={{ marginTop: 8 }} value={next}
+                     onChange={(e) => setNext(e.target.value)} />
+              {error ? (
+                <div className="tw-banner tw-banner-err" style={{ marginTop: 10 }}>{error}</div>
+              ) : null}
+            </>
+          )}
+        </div>
+        <div className="tw-dialog-foot">
+          {me?.authenticated ? (
+            <button className="tw-btn" onClick={() => void signOut()}>Keluar</button>
+          ) : null}
+          <button className="tw-btn" onClick={onClose}>Tutup</button>
+          {!done ? (
+            <button className="tw-btn tw-btn-primary" disabled={busy || !current || next.length < 8}
+                    onClick={() => void submit()}>
+              {busy ? "Menyimpan..." : "Ganti password"}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

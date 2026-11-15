@@ -19,6 +19,24 @@ export interface HealthCounts {
   reports: number;
 }
 
+/** What the shell needs to decide between the login screen and the app. */
+export interface AuthMe {
+  authenticated: boolean;
+  auth_required: boolean;
+  session_ttl_hours: number;
+  /** Only present once authenticated: never disclosed to a stranger. */
+  username?: string;
+  must_change_password?: boolean;
+  via?: "session" | "shared_token";
+}
+
+export interface LoginResult {
+  token: string;
+  expires_at: string;
+  username: string;
+  must_change_password: boolean;
+}
+
 export interface AiStatus {
   mode: "core_only" | "ai_enabled" | "missing_credential";
   label: string;
@@ -381,14 +399,21 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  opts?: { silent401?: boolean },
+): Promise<T> {
   const headers = withAuth({ "Content-Type": "application/json", ...(init?.headers || {}) });
   const res = await fetch(path, {
     ...init,
     headers,
   });
   if (!res.ok) {
-    if (res.status === 401) notifyUnauthorized();
+    // A rejected login is an expected answer, not an expired session, so it must
+    // not raise the "session expired" prompt on top of the form the user is
+    // already looking at.
+    if (res.status === 401 && !opts?.silent401) notifyUnauthorized();
     let detail = `HTTP ${res.status}`;
     try {
       const body = await res.json();
@@ -440,6 +465,20 @@ const qs = (params: Record<string, string | number | boolean | undefined | null>
 
 export const api = {
   health: () => request<Health>("/api/health"),
+  authMe: () => request<AuthMe>("/api/auth/me", undefined, { silent401: true }),
+  login: (username: string, password: string) =>
+    request<LoginResult>(
+      "/api/auth/login",
+      { method: "POST", body: JSON.stringify({ username, password }) },
+      { silent401: true },
+    ),
+  logout: () => request<{ status: string }>("/api/auth/logout", { method: "POST" }, { silent401: true }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ status: string; reauth_required: boolean; detail: string }>(
+      "/api/auth/password",
+      { method: "POST", body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }) },
+      { silent401: true },
+    ),
   projects: () => request<{ projects: Project[] }>("/api/projects"),
 
   artifacts: (projectId?: number) =>

@@ -8,15 +8,20 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field, field_validator
 
-from . import ai_analysis, ai_providers, attack_map, correlation, demo_data, reporting
+from . import ai_analysis, ai_providers, attack_map, auth, correlation, demo_data, reporting
 from . import provider_store as store
 from .bodylimit import BodyLimitMiddleware
-from .config import enforce_secure_binding, get_settings
+from .config import (
+    enforce_secure_binding,
+    get_settings,
+    is_loopback_host,
+    warn_on_weak_exposure,
+)
 from .db import (
     cursor, db_lock, fetchall, fetchone, get_conn, init_db, rows_to_dicts, seed_iocs,
 )
@@ -49,15 +54,50 @@ app.add_middleware(
 )
 
 
+# Routes that must answer without a credential. The SPA calls /api/auth/me on
+# load to decide whether to show the login screen, so a 401 there would be
+# indistinguishable from an expired session. /api/health is the liveness probe.
+# Logout is here too: dropping a session that is already gone has to succeed, or
+# a client clearing an expired credential would be told it failed and might keep
+# the dead token.
+_AUTH_EXEMPT = {"/api/health", "/api/auth/login", "/api/auth/me", "/api/auth/logout"}
+
+
+def _auth_required() -> bool:
+    """Authentication is mandatory whenever the API is not loopback-only.
+
+    Local single-analyst use stays frictionless: bound to loopback with no
+    token, there is nothing to authenticate against. The moment the server is
+    reachable from the network, a credential is demanded.
+    """
+    return bool(settings.auth_token) or not is_loopback_host(settings.host)
+
+
+def _bearer(request) -> str:
+    header = request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        return header[7:].strip()
+    return ""
+
+
+def _is_authenticated(request) -> bool:
+    """True for the shared bearer token or for a live login session."""
+    provided = _bearer(request)
+    if not provided:
+        return False
+    token = settings.auth_token
+    if token and hmac.compare_digest(provided, token):
+        return True
+    return auth.validate_session(provided) is not None
+
+
 @app.middleware("http")
 async def _require_auth(request, call_next):
-    """Shared-secret bearer check, active only when SG_AUTH_TOKEN is set.
+    """Gate every /api route except the exempt few.
 
-    Default operation is localhost-only with no token, so this is a no-op for
-    the normal single-analyst setup. If the operator exposes the API on a
-    routable interface they must set SG_AUTH_TOKEN (enforced at startup), and
-    this guard then protects every route except the unauthenticated health probe.
-    CORS is deliberately not treated as authentication.
+    The bearer header carries either the shared SG_AUTH_TOKEN (headless use) or
+    a session token from /api/auth/login (the browser). Both are checked, so an
+    operator can run either model without changing the client.
     """
     # CORS preflight must never be blocked by authentication: the browser does
     # not attach the bearer token to an OPTIONS probe. Hand it to CORSMiddleware,
@@ -66,14 +106,12 @@ async def _require_auth(request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
 
-    token = settings.auth_token
-    if token:
-        path = request.url.path
-        if path.startswith("/api/") and path != "/api/health":
-            provided = request.headers.get("authorization", "")
-            if not hmac.compare_digest(provided, f"Bearer {token}"):
-                return JSONResponse({"detail": "Unauthorized"}, status_code=401)
-    return await call_next(request)
+    path = request.url.path
+    if not path.startswith("/api/") or path in _AUTH_EXEMPT:
+        return await call_next(request)
+    if not _auth_required() or _is_authenticated(request):
+        return await call_next(request)
+    return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
 
 # Outermost middleware: refuse an oversized body before CORS, auth or any
@@ -85,9 +123,22 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _startup() -> None:
-    # Refuse to run an unauthenticated server bound to a routable interface.
-    enforce_secure_binding(settings.host, settings.auth_token)
     init_db()
+    # The single analyst account is created here so a fresh install is usable
+    # without hand-editing anything. It also decides whether the bind guard has
+    # an authentication path to rely on.
+    account = auth.ensure_default_user()
+    enforce_secure_binding(
+        settings.host, settings.auth_token,
+        user_auth_available=bool(account),
+        default_password_in_use=auth.uses_default_password(),
+        allow_default_password=settings.allow_default_password,
+    )
+    warning = warn_on_weak_exposure(
+        settings.host, settings.auth_token, auth.uses_default_password(),
+    )
+    if warning:
+        print(warning, flush=True)
     _ensure_default_project()
 
 
@@ -136,6 +187,93 @@ def _audit(action: str, target: str | None = None, detail: str | None = None,
             "INSERT INTO audit_log (project_id,action,target,detail,created_at) VALUES (?,?,?,?,?)",
             (project_id, action, target, (detail or "")[:1000], now_iso()),
         )
+
+
+class LoginIn(BaseModel):
+    username: str = Field(..., min_length=1, max_length=64)
+    password: str = Field(..., min_length=1, max_length=256)
+
+
+class PasswordIn(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=256)
+    new_password: str = Field(..., min_length=8, max_length=256)
+
+
+@app.post("/api/auth/login")
+def auth_login(payload: LoginIn) -> dict[str, Any]:
+    """Exchange the analyst credential for a session token."""
+    account = auth.authenticate(payload.username, payload.password)
+    if not account:
+        # The audit trail records the attempt but never the password.
+        _audit("login_failed", payload.username)
+        raise HTTPException(status_code=401, detail="Username atau password salah.")
+    token, expires_at = auth.create_session(
+        account["username"], settings.session_ttl_hours,
+    )
+    _audit("login_ok", account["username"])
+    return {
+        "token": token,
+        "expires_at": expires_at,
+        "username": account["username"],
+        "must_change_password": auth.uses_default_password(),
+    }
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request) -> dict[str, str]:
+    """Drop the presented session. Safe to call with a stale token."""
+    username = auth.validate_session(_bearer(request))
+    auth.revoke_session(_bearer(request))
+    if username:
+        _audit("logout", username)
+    return {"status": "ok"}
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request) -> dict[str, Any]:
+    """Whether the caller is authenticated, and what the client should do.
+
+    Deliberately exempt from the gate: the SPA calls this on load to choose
+    between the login screen and the app, and a 401 here could not be told apart
+    from an expired session. It also means this route must not disclose anything
+    a stranger could use, so the default-password flag is only reported to an
+    authenticated caller.
+    """
+    provided = _bearer(request)
+    token = settings.auth_token
+    via_shared = bool(token) and hmac.compare_digest(provided, token)
+    username = None if via_shared else auth.validate_session(provided)
+    authenticated = via_shared or username is not None
+    account = auth.get_user() or {}
+    body: dict[str, Any] = {
+        "authenticated": authenticated,
+        "auth_required": _auth_required(),
+        "session_ttl_hours": settings.session_ttl_hours,
+    }
+    if authenticated:
+        body["username"] = username or account.get("username")
+        body["must_change_password"] = auth.uses_default_password()
+        body["via"] = "shared_token" if via_shared else "session"
+    return body
+
+
+@app.post("/api/auth/password")
+def auth_change_password(payload: PasswordIn, request: Request) -> dict[str, Any]:
+    """Change the analyst password. Ends every session, including this one."""
+    username = auth.validate_session(_bearer(request))
+    if not username:
+        raise HTTPException(status_code=401, detail="Sesi tidak valid atau sudah berakhir.")
+    try:
+        auth.change_password(username, payload.current_password, payload.new_password)
+    except auth.AuthError as exc:
+        _audit("password_change_failed", username)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    _audit("password_changed", username)
+    return {
+        "status": "ok",
+        "reauth_required": True,
+        "detail": "Password diganti. Semua sesi diakhiri, silakan login lagi.",
+    }
 
 
 def _project(project_id: int | None) -> int:

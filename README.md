@@ -226,15 +226,24 @@ Dependensi dikunci di `backend/requirements.txt` (runtime, 29 pin) dan
 lingkungan yang dipakai menjalankan test ini. Python >= 3.10 (diuji 3.11 di
 Windows 10; Linux belum diverifikasi dari nol).
 
-### Deployment safety (localhost-only + auth)
+### Deployment safety (localhost-only + login)
 
 Server sengaja hanya bind ke loopback. Memilih `--host` non-loopback **ditolak
-saat startup** kecuali `SG_AUTH_TOKEN` diset; setelah diset, setiap request
-`/api/*` (kecuali `/api/health`) wajib `Authorization: Bearer <token>`. CORS
-bukan autentikasi. Mode single-analyst didokumentasikan di `docs/SECURITY.md`.
+saat startup** kecuali ada autentikasi: `SG_AUTH_TOKEN` (bearer bersama untuk
+skrip) atau akun analis. Begitu API bisa dijangkau jaringan, setiap request
+`/api/*` wajib kredensial. CORS bukan autentikasi.
+
+Saat pertama dijalankan, satu akun dibuat otomatis: **admin / admin123**. Password
+disimpan sebagai hash scrypt bersalt, dan token sesi disimpan di database hanya
+sebagai SHA-256. Password bawaan wajib diganti; aplikasi menampilkan peringatan
+selama masih dipakai. Tidak ada multi-user: ini alat satu analis, dijelaskan di
+`docs/SECURITY.md`.
 
 ```bash
-# contoh mengekspos ke LAN dengan autentikasi
+# cara biasa: bind ke jaringan, lalu login lewat UI dengan admin / admin123
+./.venv/Scripts/python.exe -m sentinelgraph serve --host 0.0.0.0 --port 8088
+
+# bearer token bersama, untuk skrip atau akses headless
 export SG_AUTH_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')"
 ./.venv/Scripts/python.exe -m sentinelgraph serve --host 0.0.0.0 --port 8088
 ```
@@ -242,12 +251,14 @@ export SG_AUTH_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32
 ### Menjalankan untuk juri (container)
 
 ```bash
-export SG_AUTH_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')"
+# token bersama bersifat opsional kalau juri login lewat UI
 docker compose up -d --build
 ```
 
 Satu image menyajikan SPA dan API pada port yang sama, jadi yang dibagikan ke juri
-hanya URL dan token. Alasan GitHub Pages dan Vercel tidak dipakai, cara kerja
+hanya URL, lalu mereka login dengan akun analis (bawaan **admin / admin123**).
+Kalau `SG_AUTH_TOKEN` ikut diset, bearer token bersama tetap berlaku sebagai jalur
+kedua. Alasan GitHub Pages dan Vercel tidak dipakai, cara kerja
 volume `/data`, dan catatan verifikasi Linux ada di `docs/DEPLOY.md`.
 
 ### Release bersih (tanpa data mesin nyata)

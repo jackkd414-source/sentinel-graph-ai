@@ -28,6 +28,13 @@ FastAPI), jadi tidak perlu memisahkan frontend dan backend.
 ```bash
 docker build -t sentinelgraph-ai .
 
+# Tanpa token bersama: juri login lewat UI.
+docker run -d --name sentinelgraph \
+  -p 8088:8088 \
+  -v sg-data:/data \
+  sentinelgraph-ai
+
+# Dengan token bersama untuk skrip, di samping login UI.
 docker run -d --name sentinelgraph \
   -p 8088:8088 \
   -e SG_AUTH_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')" \
@@ -35,10 +42,9 @@ docker run -d --name sentinelgraph \
   sentinelgraph-ai
 ```
 
-Atau lewat Compose:
+Atau lewat Compose (token opsional):
 
 ```bash
-export SG_AUTH_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')"
 docker compose up -d --build
 ```
 
@@ -47,15 +53,30 @@ docker compose up -d --build
 Dua hal saja:
 
 1. URL, misalnya `https://sg.namadomain.com`
-2. Token Bearer dari `SG_AUTH_TOKEN`
+2. Akun analis: **admin / admin123**
 
-Juri membuka URL, aplikasi meminta token, mereka menempelkannya, lalu bisa memakai
-semuanya. SPA sudah punya input token dan mengirim header `Authorization` pada
-setiap request, termasuk unduhan laporan.
+Juri membuka URL, melihat layar login, memasukkan keduanya, lalu bisa memakai
+semuanya termasuk unduhan laporan. SPA menyimpan sesi di sessionStorage tab itu
+saja, bukan localStorage, dan mengirim header `Authorization` pada setiap request.
 
-Token wajib. Server sengaja menolak bind ke alamat non-loopback kalau
-`SG_AUTH_TOKEN` kosong, dan tiap `/api/*` kecuali `/api/health` menuntut header itu.
-CORS bukan autentikasi. Rinciannya di `docs/SECURITY.md`.
+Server menolak bind ke alamat non-loopback kalau tidak ada autentikasi sama sekali,
+dan tiap `/api/*` kecuali empat route auth menuntut kredensial. CORS bukan
+autentikasi. Rinciannya di `docs/SECURITY.md`.
+
+**Ganti password bawaan sebelum dipakai publik.** `admin123` ada di README, jadi
+selama belum diganti, siapa pun yang bisa menjangkau port itu dapat masuk. Server
+mencetak peringatan saat bind non-loopback, dan UI menampilkan banner. Ganti lewat
+menu akun di kanan atas, lalu beri juri password baru itu.
+
+Guard bind menolak `--host` non-loopback selama password bawaan masih dipakai,
+karena kredensial yang tertulis di README bukan autentikasi. Tiga jalan keluar:
+
+1. ganti password di aplikasi (disarankan), atau
+2. set `SG_AUTH_TOKEN` dan pakai bearer token bersama, atau
+3. set `SG_ALLOW_DEFAULT_PASSWORD=1` untuk membuka sengaja, khusus demo.
+
+`docker-compose.yml` sudah memilih jalan ketiga supaya demo jalan langsung. Untuk
+deployment sungguhan, ganti password lalu set flag itu ke `0`.
 
 ## Yang tersimpan di volume
 

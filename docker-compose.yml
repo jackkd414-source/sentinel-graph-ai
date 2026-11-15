@@ -1,10 +1,16 @@
 # Run the whole product with one command:
 #
+#   docker compose up -d --build
+#
+# Then open http://<host>:8088 and sign in with the analyst account. The account
+# is created on first start with the default credential admin / admin123, and
+# the app warns until that password is changed.
+#
+# SG_AUTH_TOKEN is optional. Set it to also allow a shared bearer token for
+# scripts and headless use, alongside the login:
+#
 #   SG_AUTH_TOKEN=$(python -c "import secrets;print(secrets.token_urlsafe(32))") \
 #     docker compose up -d --build
-#
-# Then open http://<host>:8088 and paste that token into the app's token prompt.
-# The token is required: the server refuses to bind off-loopback without it.
 
 services:
   sentinelgraph:
@@ -13,8 +19,15 @@ services:
     ports:
       - "8088:8088"
     environment:
-      # Required. Generate one and keep it out of git.
-      SG_AUTH_TOKEN: "${SG_AUTH_TOKEN:?set SG_AUTH_TOKEN before starting}"
+      # Optional shared secret. Empty means login-only, which is fine.
+      SG_AUTH_TOKEN: "${SG_AUTH_TOKEN:-}"
+      # How long a login session stays valid, in hours.
+      SG_SESSION_TTL_HOURS: "${SG_SESSION_TTL_HOURS:-12}"
+      # The bind guard refuses to expose the API off-host while the account
+      # still uses the password printed in the README. This compose file is the
+      # deliberate demo path, so it opts in. For a real deployment: change the
+      # password in the app and set this to 0.
+      SG_ALLOW_DEFAULT_PASSWORD: "${SG_ALLOW_DEFAULT_PASSWORD:-1}"
     volumes:
       # Holds the SQLite database, artifacts and the auto-generated master key.
       - sg-data:/data

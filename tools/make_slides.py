@@ -60,6 +60,9 @@ WHITE = RGBColor(0xFF, 0xFF, 0xFF)
 BODY = "Segoe UI"
 MONO = "Consolas"
 
+# Team identity, filled in by the team. Kept here so a rebuild cannot lose it.
+TEAM = "Jasubatoci \u00b7 Arcel"
+
 W = Inches(13.333)
 H = Inches(7.5)
 M = Inches(0.72)          # left/right margin
@@ -232,7 +235,7 @@ def slide_title(prs, n=1):
     tf = textbox(s, M, H - Inches(1.4), CW, Inches(0.9))
     para(tf, "Kartika Cyber Hackathon 2026 \u00b7 Penangkalan / Defensive Shield",
          size=13.5, bold=True, color=WHITE, first=True)
-    para(tf, "[Nama Tim] \u00b7 [Anggota tim]", size=12.5, color=RAIL_TEXT, before=4)
+    para(tf, TEAM, size=12.5, color=RAIL_TEXT, before=4)
 
     notes(s,
           "CATATAN VERIFIKASI SEBELUM PRESENTASI",

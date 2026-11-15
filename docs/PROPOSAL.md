@@ -104,16 +104,19 @@ Tiga skenario adversarial dijalankan terhadap provider palsu yang sengaja berboh
 
 Selain itu:
 
-- **136 test otomatis lulus** (pytest), mencakup ingest, deteksi, korelasi, AI, keamanan,
+- **311 test otomatis lulus** (pytest), mencakup ingest, deteksi, korelasi, AI, keamanan,
   dan API.
-- **Verifikasi end-to-end**: `tools/verify.py` menjalankan 26 pemeriksaan terhadap API
-  yang berjalan dan mengembalikan verdict berbasis exit code. Hasil: **26/26 PASS**.
+- **Verifikasi end-to-end**: `tools/verify.py` menjalankan 22 pemeriksaan terhadap API
+  yang berjalan dan mengembalikan verdict berbasis exit code. Hasil: **22/22 PASS**.
 - **Jalur jaringan provider diuji nyata**: permintaan ke `api.openai.com` menghasilkan
   HTTP 401 asli, dilaporkan sebagai `ok:false` dengan kategori `auth` — bukan pura-pura
   berhasil.
+- **Provider cloud dengan kredensial valid**: OpenRouter (`deepseek-v4.1-flash`) diuji
+  end-to-end; tiga `ai_runs` berstatus `ok` tercatat pada DB runtime (2026-11-12).
 
-**Yang belum diuji dan dinyatakan terbuka:** tidak ada provider cloud yang diuji dengan
-kredensial valid. Kualitas analisis model nyata belum diukur secara kuantitatif.
+**Yang belum diuji dan dinyatakan terbuka:** provider lain (Anthropic/Gemini/Ollama asli)
+belum diuji dengan kredensial nyata; kualitas analisis model nyata belum diukur secara
+kuantitatif (presisi/recall terhadap dataset berlabel).
 
 ## 5. Kelayakan
 
@@ -161,6 +164,6 @@ sendiri.
 |---|---|---|
 | Relevansi & manfaat | 25% | Menyasar masalah nyata SOC: merangkai alert menjadi cerita yang dapat dipertanggungjawabkan. Dampak langsung pada kualitas laporan insiden. |
 | Inovasi teknis | 25% | Evidence guard yang membuang dan melaporkan sitasi karangan model; pemisahan eksplisit fakta/turunan/hipotesis pada setiap lapis, termasuk per relasi graf. |
-| Fungsi prototipe | 25% | Berjalan penuh. 136 test lulus, 26/26 pemeriksaan end-to-end PASS, tiga skenario adversarial terbukti tertangani. |
+| Fungsi prototipe | 25% | Berjalan penuh. 311 test lulus, 22/22 pemeriksaan end-to-end PASS, tiga skenario adversarial terbukti tertangani. |
 | Kelayakan | 15% | Stack minimal, tanpa dependensi AI wajib, jalan tanpa internet. Jalur produksi sudah dipetakan. |
 | Dokumentasi | 10% | README, arsitektur, model ancaman, panduan demo, dan skrip video — semuanya menyatakan batasan secara eksplisit. |

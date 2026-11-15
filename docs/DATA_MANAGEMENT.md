@@ -254,3 +254,44 @@ bukti.** Graf yang ramai tapi tanpa dasar justru pelanggaran desain.
   SentinelGraph, 0 gagal.
 - Preset `security` (tanpa admin): gagal dengan pesan jelas dan saran, tidak crash.
 - Format JSON keluaran skrip cocok dengan parser impor tanpa penyesuaian manual.
+
+## 4. Kemasan rilis: jangan pernah mengirim data mesin nyata
+
+Working tree sengaja memuat telemetri nyata (`data/*.db`, `*-wal`, `*-shm`, ekspor
+`firewall.json`/`security.json`/`sysmon.json`, `.env`, log). Semua itu **tidak boleh**
+ikut paket distribusi. `.gitignore` sudah mengecualikannya dari repo; untuk paket zip,
+pakai generator rilis:
+
+```bash
+python tools/make_release.py                # -> release/sentinelgraph-ai
+```
+
+`tools/make_release.py`:
+
+1. menyalin hanya source + docs + `frontend/dist` + skrip, melewati `.git`, `.venv`,
+   `node_modules`, `data/`, `*.db`, `*-wal`, `*-shm`, ekspor telemetri, `.env`, log;
+2. membangun DB demo dari dataset **sintetis** lewat jalur bootstrap biasa
+   (`sentinelgraph init` + `load-demo`) di direktori **scratch** — DB runtime tidak
+   pernah ikut ke paket;
+3. menjalankan `tools/check_pii_db.py` terhadap DB scratch itu; **exit != 0 jika ada match**;
+4. mengekspor dataset sintetis ke `data/demo/demo-events.jsonl` — itu yang dikirim,
+   bukan database.
+
+### Deteksi PII (`tools/check_pii_db.py`)
+
+Read-only. Mencari penanda identitas nyata: pola `DESKTOP-*`, SID `S-1-5-*`, plus <!-- PII-SCAN-ALLOW: documents the scanner's own patterns, not leaked data -->
+**hostname dan username mesin yang sedang menjalankan scan** (deteksi runtime, tanpa
+nama yang di-hardcode ke repo). Dataset sintetis (`WS-FIN-07`, `r.santoso`,
+IP RFC 5737, `*.example`) tidak cocok.
+
+```bash
+python tools/check_pii_db.py --db data/sentinelgraph.db
+# DB mesin nyata  -> TOTAL PII ROW-MATCHES: ~17k  (memang berisi telemetri)
+
+# Paket rilis tidak memuat *.db sama sekali; yang dikirim hanya dataset sintetis:
+ls release/sentinelgraph-ai/data/demo/
+# -> demo-events.jsonl  README.md
+```
+
+Jangan hapus database instalasi aktif tanpa backup. Pembersihan dilakukan pada
+salinan rilis; DB aktif tetap milik analis.

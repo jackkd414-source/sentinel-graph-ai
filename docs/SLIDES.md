@@ -131,8 +131,8 @@ yang berjalan."*
 
 **Poin:**
 
-- 136 test otomatis lulus
-- 26/26 pemeriksaan end-to-end PASS (verdict berbasis exit code)
+- 311 test otomatis lulus
+- 22/22 pemeriksaan end-to-end PASS (verdict berbasis exit code)
 - 4 insiden, 60 node, 52 relasi graf — **setiap relasi membawa ID event sumbernya**
 - Rule engine berjalan tanpa AI dan tanpa jaringan
 
@@ -220,9 +220,11 @@ Slide 3, 7, dan 9 dilewati. Bila ditanya, jawab dari slide lengkap.
 > penting bukan hasilnya, tapi bahwa hasilnya bisa diperiksa."
 
 **"Sudah dicoba dengan provider nyata?"**
-> "Jalur jaringannya iya — kami menguji ke api.openai.com dan mendapat 401 asli karena
-> kredensial tidak valid. Yang belum: mengukur kualitas analisis dengan kredensial valid.
-> Itu tercatat sebagai batasan di proposal."
+> "Iya. Jalur konektivitas diuji ke api.openai.com dan mendapat 401 asli karena kunci
+> tidak valid. Lalu kami menguji OpenRouter dengan kredensial valid dan
+> `deepseek-v4.1-flash`: analisis insiden berstatus `ok`, hipotesis bertag bukti, tanpa
+> sitasi karangan. Yang belum: mengukur kualitas secara kuantitatif, dan provider lain
+> (Anthropic/Gemini/Ollama asli)."
 
 **"Data demo asli?"**
 > "Sintetis, dan kami sebut terus terang. Yang diuji adalah mekanisme, bukan akurasi

@@ -181,8 +181,9 @@ di akhir dan memberi tanda, sehingga analis tahu bahwa posisinya tidak dapat dip
   didesain menunjuk ke localhost.
 - Semua pesan error di-redaksi sebelum disimpan (`redact_secrets`).
 
-Kunci API dienkripsi dengan Fernet bila `SG_MASTER_KEY` tersedia. Bila tidak, kunci
-**tidak** disimpan ke database sama sekali — aplikasi tidak pernah menyimpan kunci
+Kunci API dienkripsi dengan Fernet sebelum masuk database. Kunci utama diambil dari
+`SG_MASTER_KEY`; bila tidak diset, satu kunci dibuat otomatis di
+`<data dir>/master.key` saat pertama dipakai. Aplikasi tidak pernah menyimpan kunci
 dalam bentuk plaintext.
 
 ## 9. Jalur kegagalan yang disengaja

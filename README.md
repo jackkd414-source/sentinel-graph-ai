@@ -107,7 +107,7 @@ sentinelgraph-ai/
 │   │   ├── security.py         # SSRF guard, redaksi rahasia, enkripsi
 │   │   ├── timeutil.py         # Parsing waktu + pelacakan asumsi
 │   │   └── demo_data.py        # Dataset demo sintetis
-│   ├── tests/                  # 136 test (pytest)
+│   ├── tests/                  # 311 test (pytest)
 │   └── tools/fake_provider.py  # Provider stub untuk uji anti-halusinasi
 ├── frontend/
 │   └── src/
@@ -160,10 +160,10 @@ Dinyatakan terbuka agar tidak menyesatkan penilai:
 
 | Provider | Diuji | Hasil |
 |---|---|---|
-| OpenAI | Ya (konektivitas) | Request nyata ke `api.openai.com`, **HTTP 401** karena kunci tidak valid. Dilaporkan `ok:false`, `error_category:"auth"`. |
-| **custom_openai (model reasoning cloud)** | **Ya (end-to-end, kunci nyata)** | Diuji terhadap `deepseek-v4.1-flash` lewat gateway OpenAI-compatible. Analisis lengkap dihasilkan: `status: ok`, 0 issue, 4 hipotesis, **semua sitasi valid (13/13 ID ada di DB, 0 karangan)**, latensi ~18,8 detik, 3965 token keluaran. |
-| Ollama (lokal) | Ya (end-to-end) | Diuji terhadap stub lokal. Koneksi, pemilihan model, analisis, dan evidence guard berjalan penuh. |
-| Anthropic / Gemini / OpenRouter | Tidak | Adapter ada dan memakai jalur kode yang sama, tetapi **tidak diuji dengan kunci nyata**. |
+| **OpenRouter (`deepseek-v4.1-flash`)** | **Ya (end-to-end, kunci nyata)** | Tiga `ai_runs` berstatus `ok` pada DB runtime (2026-11-12) terhadap insiden nyata; iterasi juga mencatat `validation_failed` (output terpotong, `finish_reason=length`) dan satu `timeout` sebelum default token/timeout dinaikkan. Output lengkap: hipotesis bertag `evidence_status`, `stripped_reference_count: 0`. |
+| OpenAI | Ya (konektivitas saja) | Request nyata ke `api.openai.com` dengan kunci tidak valid -> **HTTP 401**, dilaporkan `ok:false`, `error_category:"auth"` (direproduksi 2026-11-14). Jalur jaringan terbukti; kualitas analisis tidak diukur. |
+| Ollama | Ya, terhadap stub lokal (**bukan Ollama asli**) | provider_config `Stub Local` (`http://127.0.0.1:8099`). Koneksi, pemilihan model, analisis, dan evidence guard berjalan - tetapi modelnya stub. |
+| Anthropic / Gemini / custom_openai | Tidak | Adapter ada dan memakai jalur kode yang sama, tetapi **tidak diuji dengan kunci nyata**. |
 
 **Temuan penting saat menguji model cloud nyata:** model reasoning menghabiskan
 *seluruh* budget `max_tokens` untuk penalaran tersembunyi dan mengembalikan `content`
@@ -188,7 +188,7 @@ Variabel lingkungan terkait:
 
 | Variabel | Fungsi |
 |---|---|
-| `SG_MASTER_KEY` | Kunci enkripsi untuk menyimpan API key provider di database. Tanpa ini, kunci tidak dipersistensi. |
+| `SG_MASTER_KEY` | Kunci enkripsi API key provider di database. Bila kosong, kunci dibuat otomatis di `<data dir>/master.key` saat pertama dipakai. |
 | `SG_DB_PATH` | Lokasi database SQLite |
 | `SG_DEFAULT_TZ` | Zona waktu default untuk timestamp tanpa zona |
 
@@ -201,27 +201,53 @@ yang memang diarahkan ke localhost secara sengaja.
 ## 8. Perintah instalasi dan menjalankan
 
 ```bash
-# 1. Siapkan virtualenv
-cd sentinelgraph-ai
+# 1. Siapkan virtualenv (Windows: .venv\Scripts\python.exe · Linux/macOS: .venv/bin/python)
 python -m venv .venv
-./.venv/Scripts/python.exe -m pip install -r backend/requirements.txt   # Windows
+./.venv/Scripts/python.exe -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt   # Windows
+# ./.venv/bin/python -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt         # Linux/macOS
 
-# 2. Inisialisasi database
+# 2. Inisialisasi database + muat dataset demo sintetis
 export PYTHONPATH=backend
 ./.venv/Scripts/python.exe -m sentinelgraph init
-
-# 3. Muat data demo
 ./.venv/Scripts/python.exe -m sentinelgraph load-demo
 
-# 4. Bangun frontend (sekali saja, atau setelah mengubah src/)
+# 3. Bangun frontend (sekali saja, atau setelah mengubah src/)
 cd frontend && npm install && npm run build && cd ..
 
-# 5. Jalankan server
+# 4. Jalankan server (default: localhost-only)
 export SG_MASTER_KEY="$(./.venv/Scripts/python.exe -c 'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
 ./.venv/Scripts/python.exe -m sentinelgraph serve --port 8088
 ```
 
 Buka `http://127.0.0.1:8088/`.
+
+Dependensi dikunci di `backend/requirements.txt` (runtime, 29 pin) dan
+`backend/requirements-dev.txt` (5 pin dev). Semua pin diverifikasi cocok dengan
+lingkungan yang dipakai menjalankan test ini. Python >= 3.10 (diuji 3.11 di
+Windows 10; Linux belum diverifikasi dari nol).
+
+### Deployment safety (localhost-only + auth)
+
+Server sengaja hanya bind ke loopback. Memilih `--host` non-loopback **ditolak
+saat startup** kecuali `SG_AUTH_TOKEN` diset; setelah diset, setiap request
+`/api/*` (kecuali `/api/health`) wajib `Authorization: Bearer <token>`. CORS
+bukan autentikasi. Mode single-analyst didokumentasikan di `docs/SECURITY.md`.
+
+```bash
+# contoh mengekspos ke LAN dengan autentikasi
+export SG_AUTH_TOKEN="$(python -c 'import secrets;print(secrets.token_urlsafe(32))')"
+./.venv/Scripts/python.exe -m sentinelgraph serve --host 0.0.0.0 --port 8088
+```
+
+### Release bersih (tanpa data mesin nyata)
+
+```bash
+./.venv/Scripts/python.exe tools/make_release.py
+# -> release/sentinelgraph-ai : source + docs + scripts + frontend/dist
+#    + data/demo/demo-events.jsonl (dataset sintetis). TIDAK ada DB runtime,
+#    .env, WAL/SHM, telemetri Sysmon/firewall/security, atau log.
+#    Gagal (exit != 0) bila ada match PII atau file terlarang lolos.
+```
 
 Mode pengembangan frontend (hot reload):
 
@@ -233,24 +259,28 @@ Menjalankan test dan verifikasi:
 
 ```bash
 export PYTHONPATH=backend
-./.venv/Scripts/python.exe -m pytest backend/tests -q      # 136 test
+./.venv/Scripts/python.exe -m pytest backend/tests -q      # 311 test
 ./.venv/Scripts/python.exe tools/verify.py                 # verdict PASS/FAIL
 ```
+
+Pintu masuk kanonik: `scripts\verify.ps1` (Windows) / `bash scripts/verify.sh`
+(test + typecheck + release gate, keluar dengan `VERIFY: PASS`), atau
+`.venv/Scripts/python.exe -m pytest` langsung (pyproject.toml mengatur `pythonpath`).
 
 ## 9. Hasil pengujian sebenarnya
 
 ### Test otomatis
 
 ```
-136 passed, 3 warnings in 6.85s
+311 passed, 1 warning in ~21s
 ```
 
-Tiga warning berasal dari `on_event` FastAPI yang sudah deprecated — bukan kegagalan.
+Warning yang tersisa berasal dari `starlette.testclient` (httpx deprecated) — bukan kegagalan.
 
 ### Verifikasi end-to-end
 
 ```
-26/26 checks passed
+22/22 checks passed   (tanpa provider AI; cek AI di-skip via --skip-ai)
 VERDICT: PASS
 ```
 
@@ -321,31 +351,48 @@ Stub provider mengembalikan tiga jenis kebohongan:
 | Model ancaman & batasan | `docs/SECURITY.md` |
 | Panduan demo | `docs/DEMO.md` |
 | **Kelola data & ambil log Windows** | `docs/DATA_MANAGEMENT.md` |
-| **Pasang Sysmon (agar deteksi nyata bekerja)** | `docs/SYSMON.md` || Screenshot asli (dari aplikasi berjalan) | `docs/screenshots/` |
+| **Pasang Sysmon (agar deteksi nyata bekerja)** | `docs/SYSMON.md` |
+| **Pemetaan MITRE ATT&CK per rule** | `docs/ATTACK_MAPPING.md` |
+| Screenshot asli (dari aplikasi berjalan) | `docs/screenshots/` |
 | Verifikasi mandiri | `tools/verify.py` |
 
-## 12. Risiko keamanan dan batasan
+## 12. Risiko keamanan, remediasi, dan batasan
 
-- **Tanpa autentikasi.** Siapa pun dengan akses jaringan ke port bisa membaca semua
-  insiden dan mengubah status. Untuk demo ini diterima; untuk produksi tidak.
-- **API key provider disimpan terenkripsi hanya jika `SG_MASTER_KEY` diset.**
-  Tanpa itu, kunci tidak dipersistensi sama sekali (bukan disimpan plaintext).
-- **`allow_private` hanya untuk provider lokal.** SSRF guard memblokir alamat privat
-  untuk provider cloud; ini membatasi pengujian terhadap endpoint lokal.
-- **Unggahan file belum dibatasi ukurannya secara ketat.** File sangat besar bisa
-  menghabiskan memori.
+Audit remediasi (P0/P1/P2) sudah diterapkan dan diuji ulang. Ringkasannya:
+
+| Area | Sebelum | Sesudah (terverifikasi) |
+|---|---|---|
+| **SSRF (IPv4-mapped IPv6)** | `http://[::ffff:127.0.0.1]:8088` lolos validasi | Semua alamat dinormalisasi (mapped, 6to4, Teredo), dicek `is_global`; non-global ditolak |
+| **DNS rebinding** | Resolusi ulang saat koneksi | Alamat diverifikasi lalu **di-pin** di transport; host yang berubah ditolak |
+| **Upload memory exhaustion** | `await file.read()` sebelum cek ukuran | Baca chunk berbatas; berhenti di atas `SG_MAX_UPLOAD_BYTES`, tanpa artefak parsial |
+| **Binding non-loopback tanpa auth** | Diizinkan diam-diam | Startup **gagal** kecuali `SG_AUTH_TOKEN`; lalu `/api/*` wajib Bearer |
+| **Attack graph keluar viewport** | Radius melebar > viewBox tetap | Auto-fit bounding box + zoom-to-fit + center + cap/grouping + filter incident |
+| **PII di repo/release** | Tool mengandung hostname/user asli; DB nyata di working tree | Tool di-generalisasi; `tools/make_release.py` mengecualikan DB/telemetri dan memverifikasi 0 PII |
+
+Batasan yang tersisa (jujur):
+
+- **Autentikasi single-analyst**, bukan multi-user/RBAC. Satu token bersama; belum ada
+  pemisahan hak baca/tulis per pengguna.
+- **API key provider** selalu dienkripsi (Fernet) sebelum masuk database. Kunci utama
+  diambil dari `SG_MASTER_KEY`, atau dibuat otomatis di `<data dir>/master.key` saat
+  pertama dipakai. Tidak ada penyimpanan plaintext; amankan berkas kunci tersebut.
+- **`allow_private`** hanya berlaku untuk provider lokal (Ollama) pada host loopback;
+  provider cloud tetap diblokir ke alamat privat.
 - **AI dapat menghasilkan teks menyesatkan.** Mitigasi: sitasi diverifikasi, ringkasan
-  ditandai tidak terverifikasi, dan deteksi tidak pernah bergantung pada AI. Namun teks
-  bebas tetap tidak bisa diverifikasi mesin dan harus dibaca sebagai klaim.
-- **Dataset demo bersifat sintetis** dan bukan bukti kemampuan deteksi pada data nyata.
+  ditandai tidak terverifikasi, deteksi tidak pernah bergantung pada AI. Teks bebas
+  tetap harus dibaca sebagai klaim.
+- **Dataset demo sintetis** — bukan bukti kemampuan deteksi pada data nyata.
+- **Redirect HTTP** tidak diikuti oleh client provider (`follow_redirects=False`),
+  sehingga tujuan redirect tak tervalidasi tidak pernah disentuh.
 
 ## 13. Langkah berikutnya
 
-1. **Autentikasi + RBAC** — multi-analyst, pemisahan hak baca/tulis.
+1. **RBAC multi-analyst** — pemisahan hak baca/tulis; token saat ini hanya shared-secret.
 2. **Konektor SIEM/EDR** — Syslog, Wazuh, Elastic, Splunk HEC.
 3. **Kalibrasi rule** terhadap baseline nyata; R-006 khususnya.
 4. **Uji provider cloud dengan kredensial valid** dan ukur kualitas analisis secara
    kuantitatif (misalnya berapa persen hipotesis yang lolos verifikasi analis).
 5. **Penyimpanan bukti immutable** — hash chain untuk artifact.
 6. **Ekspor STIX/TAXII** agar temuan bisa dibagikan ke platform lain.
-7. **Perbaikan layout graph** untuk ribuan node.
+7. **Virtualisasi graph** (clustering dinamis) untuk >2000 node — cap + grouping saat ini
+   menangani kepadatan, tetapi belum meng-cluster secara semantik.

@@ -14,10 +14,7 @@ import { ProvidersPage } from "./pages/ProvidersPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { clearToken, getToken, hasToken, setToken } from "./auth";
-
-type RouteKey =
-  | "dashboard" | "incidents" | "incident" | "graph" | "events"
-  | "import" | "evidence" | "rules" | "providers" | "reports" | "settings";
+import type { RouteKey } from "./routes";
 
 const initials = (name?: string) =>
   (name || "SentinelGraph AI")
@@ -178,7 +175,8 @@ export function App() {
         </div>
       ) : route === "dashboard" ? (
         <div className="tw-content">
-          <Dashboard onOpenIncident={openIncident} onLoadDemo={loadDemo} demoBusy={demoBusy} reloadKey={reloadKey} />
+          <Dashboard onOpenIncident={openIncident} onLoadDemo={loadDemo} demoBusy={demoBusy}
+                     reloadKey={reloadKey} onNavigate={setRoute} />
         </div>
       ) : route === "incidents" ? (
         <div className="tw-content"><IncidentsList onOpen={openIncident} /></div>

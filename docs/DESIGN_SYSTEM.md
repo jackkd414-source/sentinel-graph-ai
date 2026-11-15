@@ -98,3 +98,21 @@ of the original brief:
 
 Tokens for this layer live at the end of `tokens.css`; the overrides are the
 `SKIN 2` sections of `base.css`, `components.css` and `pages.css`.
+
+## Dashboard onboarding (self-teaching — no manual required)
+
+The dashboard teaches the workflow in place, so a first-time analyst never has
+to open the docs or the source:
+
+- **Start here / Where to go next** (`components/guide.tsx`): a state-aware
+  panel. Empty workspace -> "Start here" with the four stages plus a *Load demo
+  dataset* action. Data present -> "Where to go next" with a concrete next step
+  (`Next step: open INC-0001 ...` and an Investigate button).
+- **Workflow strip**: four clickable stage cards (Bring evidence in -> See what
+  fired -> Investigate -> Write it up), each showing a live count from the real
+  workspace and navigating to the matching screen.
+- **What the words mean**: a plain-language glossary (Event, Alert, Incident,
+  Evidence, AI) inside the guide, plus the standing rule that facts and
+  hypotheses are always shown apart.
+- Dismissible, and restorable via the *How this works* button in the page header
+  (state in `localStorage: sg.guide.hidden`).

@@ -9,15 +9,21 @@ import {
 } from "../components/ui";
 import { Icons } from "../components/icons";
 import { Donut } from "../components/widgets";
+import { StartHere } from "../components/guide";
+import type { RouteKey } from "../routes";
 
 interface Props {
   onOpenIncident: (id: number) => void;
   onLoadDemo: () => Promise<void>;
   demoBusy: boolean;
   reloadKey: number;
+  onNavigate: (route: RouteKey) => void;
 }
 
-export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey }: Props) {
+const GUIDE_KEY = "sg.guide.hidden";
+
+export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey, onNavigate }: Props) {
+  const [showGuide, setShowGuide] = useState(() => localStorage.getItem(GUIDE_KEY) !== "1");
   const [health, setHealth] = useState<Health | null>(null);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -53,6 +59,10 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey }: P
   }, {});
   const openIncidents = incidents.filter((i) => i.status === "open").length;
   const affected = new Set(alerts.flatMap((a) => (a.host ? [a.host] : []))).size;
+  const nextIncident = incidents.find((i) => i.status === "open") ?? null;
+
+  const dismissGuide = () => { localStorage.setItem(GUIDE_KEY, "1"); setShowGuide(false); };
+  const restoreGuide = () => { localStorage.removeItem(GUIDE_KEY); setShowGuide(true); };
 
   const incidentCols: Column<IncidentSummary>[] = [
     { key: "sev", header: "Severity", width: 96, render: (i) => <SeverityIndicator severity={i.severity} /> },
@@ -89,6 +99,12 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey }: P
         meta={<>Last updated <span className="mono">{fmtTime(health.time)}</span> UTC</>}
         actions={
           <>
+            {!showGuide ? (
+              <button className="tw-btn tw-btn-sm" onClick={restoreGuide}>
+                {Icons.info({ style: { width: 14, height: 14 } })}
+                How this works
+              </button>
+            ) : null}
             <button className="tw-btn tw-btn-sm" onClick={() => void load()} disabled={loading}>
               {Icons.refresh({ style: { width: 14, height: 14 } })}
               Refresh
@@ -100,17 +116,17 @@ export function Dashboard({ onOpenIncident, onLoadDemo, demoBusy, reloadKey }: P
         }
       />
 
-      {isEmpty ? (
-        <div className="tw-banner tw-banner-info" style={{ marginBottom: 20 }}>
-          <span style={{ flex: 1 }}>
-            <strong>Workspace is empty.</strong> Load the built-in synthetic dataset to explore the
-            full pipeline (import → detection → correlation → graph → report). All demo material is
-            clearly labelled as synthetic.
-          </span>
-          <button className="tw-btn tw-btn-sm tw-btn-primary" onClick={() => void onLoadDemo()} disabled={demoBusy}>
-            Load demo dataset
-          </button>
-        </div>
+      {showGuide ? (
+        <StartHere
+          isEmpty={isEmpty}
+          counts={{ events: c.events, alerts: c.alerts, incidents: c.incidents, reports: c.reports }}
+          nextIncident={nextIncident}
+          demoBusy={demoBusy}
+          onLoadDemo={() => void onLoadDemo()}
+          onGo={onNavigate}
+          onOpenIncident={onOpenIncident}
+          onDismiss={dismissGuide}
+        />
       ) : null}
 
       {error ? <div style={{ marginBottom: 20 }}><ErrorState message={error} onRetry={load} /></div> : null}
